@@ -1,0 +1,33 @@
+{
+  "name": "keyguard-express",
+  "version": "0.3.0",
+  "description": "API key authentication, rate limiting, and abuse prevention as a drop-in Express.js library.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "keyguard": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch examples/basic.ts",
+    "start": "node dist/examples/basic.js",
+    "cli": "tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/express": "^4.17.21",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.0"
+  }
+}
