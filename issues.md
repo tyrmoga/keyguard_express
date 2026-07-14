@@ -49,4 +49,8 @@ _All known issues from the original Python audit are now resolved._
 | 31 | Scoped admin roles | `src/api/admin.router.ts` (verifyAdmin, requireOwner, requireOrgAccess) | ✅ |
 | 32 | Admin action audit log | `src/db/models.ts` + `GET /admin/audit-log` | ✅ |
 | 33 | Alerting hooks | `KeyGuardConfigOptions.onAbuseThreshold` / `onKeyExpiringSoon` | ✅ |
+| 34 | Pluggable database backend | `src/db/types.ts` + `src/db/postgres.ts` + factory | ✅ |
+| 35 | Health check endpoint | `src/health.ts` | ✅ |
+| 36 | Graceful shutdown | `KeyGuard.shutdown()` | ✅ |
+| 37 | Async DB methods | All `IDatabaseBackend` methods return `Promise` | ✅ |
 

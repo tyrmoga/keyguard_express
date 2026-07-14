@@ -12,7 +12,8 @@ export { TokenBucketRateLimitService } from "./services/token-bucket.service"
 export { RateLimitService } from "./services/rate-limit.service"
 export { HybridRateLimitService } from "./services/hybrid-rate-limit.service"
 export { createAdminRouter } from "./api/admin.router"
-export { KeyGuardDb } from "./db/models"
+export { KeyGuardDb, PostgresDb, createDb } from "./db"
+export { healthHandler } from "./health"
 
 export type {
   KeyGuardConfigOptions,
@@ -29,3 +30,4 @@ export type {
   AdminTokenRow,
   AdminAuditLogRow,
 } from "./types"
+export type { IDatabaseBackend } from "./db"

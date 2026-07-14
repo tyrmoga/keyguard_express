@@ -4,6 +4,7 @@ import { z } from "zod"
 import {
   KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp,
   requireScope, headers, corsMiddleware, validateBody, requireHmac,
+  healthHandler,
 } from "../src"
 import { createAdminRouter } from "../src/api/admin.router"
 
@@ -25,10 +26,15 @@ app.use(headers())
 app.use(corsMiddleware(kg))
 
 // 2. Initialize database and seed data
-kg.initDb()
-seedTestData(kg)
+;(async () => {
+  await kg.initDb()
+  await seedTestData(kg)
+})()
 
-// 3. Protect all routes under /api
+// 3. Health check (outside auth — for load balancers)
+app.get("/healthz", healthHandler(kg))
+
+// 4. Protect all routes under /api
 app.use(keyGuardMiddleware(kg, "/api"))
 
 // 4. Mount admin router
@@ -97,16 +103,20 @@ app.listen(PORT, () => {
   console.log(`   Docs:      http://localhost:${PORT}/docs\n`)
 })
 
+// Graceful shutdown
+process.on("SIGTERM", async () => { console.log("\nShutting down..."); await kg.shutdown(); process.exit(0) })
+process.on("SIGINT", async () => { console.log("\nShutting down..."); await kg.shutdown(); process.exit(0) })
+
 // ── Seed Helper ──
 
-function seedTestData(kg: KeyGuard): void {
-  const existingOrgs = kg.db.listOrganizations()
+async function seedTestData(kg: KeyGuard): Promise<void> {
+  const existingOrgs = await kg.db.listOrganizations()
   if (existingOrgs.length > 0) return
 
-  const org = kg.db.createOrganization("Demo Org")
+  const org = await kg.db.createOrganization("Demo Org")
 
   const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey()
-  kg.db.createApiKey({
+  await kg.db.createApiKey({
     org_id: org.id,
     label: "demo-key",
     prefix: rawKey.slice(0, 20),

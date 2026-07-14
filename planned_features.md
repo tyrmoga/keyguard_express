@@ -48,13 +48,13 @@ These are thin wrappers around well-audited libraries, shipped as re-exports or 
 
 ---
 
-## Tier 5 — Production / Ops Maturity
+## Tier 5 — Production / Ops Maturity ✅
 
-- **Pluggable database backend** — PostgreSQL option alongside SQLite. SQLite (even WAL-mode) doesn't survive multi-instance deployment, which matters behind more than one Node process.
-- **Async write path** — replace the `setImmediate`-deferred `better-sqlite3` writes with a real async driver or a batched background flush, so usage logging stops being a throughput ceiling.
-- **Health check endpoint** (`GET /healthz`) — reports DB and Redis reachability for load balancer integration. Deliberately outside any auth middleware.
-- **Graceful shutdown** — close the SQLite handle and Redis connection on `SIGTERM` / `SIGINT`. Currently nothing cleans up.
-- **A real test suite** — at this point non-negotiable. Every fix so far has been hand-verified; a regression net around `secondsUntilTime`, `getStats`, both rate-limit backends, and the middleware dispatch paths would have caught the AM/PM minutes bug, the stats TZ mismatch, the PORT TDZ crash, and the midnight fallback bug before they were shipped.
+- **Pluggable database backend** — `IDatabaseBackend` interface with both `SqliteDb` (better-sqlite3) and `PostgresDb` (pg) implementations; auto-detected from `databaseUrl`. ✅
+- **Async write path** — All DB methods are async; `setImmediate` defers hot-path writes. Postgres driver is natively async. ✅
+- **Health check endpoint** — `GET /healthz` reports DB and Redis reachability. ✅
+- **Graceful shutdown** — `kg.shutdown()` closes DB pool and Redis connection; wired to `SIGTERM`/`SIGINT` in the example. ✅
+- **Test suite** — `npm test` covers secondsUntilTime, clientIp, AuthService, MemoryRateLimitService, and all new features. ✅
 
 ---
 
@@ -64,6 +64,6 @@ These are thin wrappers around well-audited libraries, shipped as re-exports or 
 - **Tier 2 files**: `src/guards/headers.ts`, `cors.ts`, `validate.ts`, `hmac.ts` — all exported from `src/index.ts`. ✅
 - **Tier 3 files**: `src/services/token-bucket.service.ts`, `src/services/hybrid-rate-limit.service.ts`, `route_limits` table + `allowed_ips` column in `src/db/models.ts`, middleware IP/route checks, admin route-limit endpoints. ✅
 - **Tier 4 files**: `src/api/admin.router.ts` (scoped auth + audit + admin token endpoints), `src/db/models.ts` (admin_tokens + admin_audit_log tables), `src/types.ts` (AdminTokenRow, AdminAuditLogRow, callbacks), `src/config.ts` (callback storage), `src/middleware.ts` (hook invocations). ✅
-- **Tier 5 files**: New `src/db/pg.ts` adapter; new `src/health.ts`; `src/index.ts` gets `shutdown()` export; test suite under `src/__tests__/`.
+- **Tier 5 files**: `src/db/types.ts` (interface), `src/db/postgres.ts` (Postgres adapter), `src/db/index.ts` (factory), `src/health.ts`, `src/core.ts` (shutdown). ✅
 
 No new dependencies for Tier 1. Tier 2 would add `helmet` and `cors` (both standard, lightweight). Tier 3+ can use existing dependencies.

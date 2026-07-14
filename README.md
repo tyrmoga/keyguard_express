@@ -22,6 +22,9 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 - **Scoped Admin Roles** — `owner` (full access) and `org_admin` (single org) tokens
 - **Admin Audit Log** — every admin action recorded with IP and timestamp
 - **Alerting Hooks** — `onAbuseThreshold` and `onKeyExpiringSoon` callbacks
+- **PostgreSQL Support** — pluggable backend via `IDatabaseBackend` (SQLite default, Postgres with `postgres://` URL)
+- **Health Check** — `GET /healthz` returns DB/Redis status
+- **Graceful Shutdown** — `kg.shutdown()` closes connections
 - **Reverse Proxy Aware** — `X-Forwarded-For` respected when present
 - **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
 - **Security Headers** — `app.use(headers())` — helmet preset tuned for APIs

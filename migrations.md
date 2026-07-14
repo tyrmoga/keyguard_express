@@ -213,11 +213,13 @@ curl http://localhost:8000/api/data -H "X-API-KEY: kg_live_..."
 - ✅ Scoped admin roles (`admin_tokens` table + `requireOwner`/`requireOrgAccess`)
 - ✅ Admin audit log (`admin_audit_log` table + `GET /admin/audit-log`)
 - ✅ Alerting hooks (`onAbuseThreshold`, `onKeyExpiringSoon` callbacks)
+- ✅ Pluggable database backend (`IDatabaseBackend` + `PostgresDb`)
+- ✅ Health check endpoint (`GET /healthz`)
+- ✅ Graceful shutdown (`KeyGuard.shutdown()`)
+- ✅ Async DB methods (all return `Promise`)
 
 ## 10. Future Work
 
-- Add PostgreSQL driver option
 - Add CI/CD pipeline
 - Publish to npm
-- Tier 5: Async write path, health endpoint, graceful shutdown
 - Tier 5: Async write path, health endpoint, graceful shutdown

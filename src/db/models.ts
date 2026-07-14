@@ -1,6 +1,7 @@
 import Database from "better-sqlite3"
 import { v4 as uuid } from "uuid"
 import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
+import { IDatabaseBackend } from "./types"
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -70,7 +71,12 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 `
 
-export class KeyGuardDb {
+function wrap<T>(fn: () => T): Promise<T> {
+  try { return Promise.resolve(fn()) }
+  catch (e) { return Promise.reject(e) }
+}
+
+export class KeyGuardDb implements IDatabaseBackend {
   private db: Database.Database
 
   constructor(databaseUrl: string) {
@@ -102,236 +108,144 @@ export class KeyGuardDb {
     }
   }
 
-  init(): void {
+  async init(): Promise<void> {
     this.db.exec(SCHEMA)
     this.migrate()
   }
 
-  // ── Organizations ──
-
-  createOrganization(name: string): OrganizationRow {
+  async createOrganization(name: string): Promise<OrganizationRow> {
     const id = uuid()
     this.db.prepare("INSERT INTO organizations (id, name) VALUES (?, ?)").run(id, name)
-    return this.getOrganization(id)!
+    return (await this.getOrganization(id))!
   }
 
-  getOrganization(id: string): OrganizationRow | undefined {
+  async getOrganization(id: string): Promise<OrganizationRow | undefined> {
     return this.db.prepare("SELECT * FROM organizations WHERE id = ?").get(id) as any
   }
 
-  findOrganizationByName(name: string): OrganizationRow | undefined {
+  async findOrganizationByName(name: string): Promise<OrganizationRow | undefined> {
     return this.db.prepare("SELECT * FROM organizations WHERE name = ?").get(name) as any
   }
 
-  listOrganizations(): (OrganizationRow & { key_count: number })[] {
+  async listOrganizations(): Promise<(OrganizationRow & { key_count: number })[]> {
     return this.db
-      .prepare(
-        `SELECT o.*, (SELECT COUNT(*) FROM api_keys WHERE org_id = o.id) AS key_count
-         FROM organizations o ORDER BY o.created_at`
-      )
+      .prepare(`SELECT o.*, (SELECT COUNT(*) FROM api_keys WHERE org_id = o.id) AS key_count FROM organizations o ORDER BY o.created_at`)
       .all() as any
   }
 
-  // ── API Keys ──
-
-  createApiKey(row: CreateApiKeyInput): ApiKeyRow {
+  async createApiKey(row: CreateApiKeyInput): Promise<ApiKeyRow> {
     const id = uuid()
     this.db
-      .prepare(
-        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id, key_salt, key_hash_stretched, allowed_ips)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        id, row.org_id, row.label, row.prefix, row.key_hash,
-        row.rate_limit_per_minute, JSON.stringify(row.scopes),
-        row.monthly_limit ?? null, row.expires_at ?? null,
-        row.rotates_to_id ?? null, row.key_salt ?? null,
-        row.key_hash_stretched ?? null, row.allowed_ips ?? null,
-      )
-    return this.getApiKey(id)!
+      .prepare(`INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id, key_salt, key_hash_stretched, allowed_ips) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, row.org_id, row.label, row.prefix, row.key_hash, row.rate_limit_per_minute, JSON.stringify(row.scopes), row.monthly_limit ?? null, row.expires_at ?? null, row.rotates_to_id ?? null, row.key_salt ?? null, row.key_hash_stretched ?? null, row.allowed_ips ?? null)
+    return (await this.getApiKey(id))!
   }
 
-  setRotation(oldKeyId: string, newKeyId: string): void {
-    this.db
-      .prepare("UPDATE api_keys SET rotates_to_id = ? WHERE id = ?")
-      .run(newKeyId, oldKeyId)
+  async setRotation(oldKeyId: string, newKeyId: string): Promise<void> {
+    this.db.prepare("UPDATE api_keys SET rotates_to_id = ? WHERE id = ?").run(newKeyId, oldKeyId)
   }
 
-  getMonthlyUsage(keyId: string): number {
-    const row = this.db
-      .prepare(
-        `SELECT COUNT(*) as c FROM usage_logs
-         WHERE key_id = ? AND timestamp >= date('now', 'start of month', '0 months')`
-      )
-      .get(keyId) as any
+  async getMonthlyUsage(keyId: string): Promise<number> {
+    const row = this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE key_id = ? AND timestamp >= date('now', 'start of month', '0 months')").get(keyId) as any
     return row?.c ?? 0
   }
 
-  getApiKey(id: string): ApiKeyRow | undefined {
+  async getApiKey(id: string): Promise<ApiKeyRow | undefined> {
     return this.db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as any
   }
 
-  findApiKeyByHash(keyHash: string): ApiKeyRow | undefined {
+  async findApiKeyByHash(keyHash: string): Promise<ApiKeyRow | undefined> {
     return this.db.prepare("SELECT * FROM api_keys WHERE key_hash = ?").get(keyHash) as any
   }
 
-  findApiKeyByPrefix(prefix: string): ApiKeyRow | undefined {
-    return this.db
-      .prepare("SELECT * FROM api_keys WHERE prefix LIKE ? || '%'")
-      .get(prefix) as any
+  async findApiKeyByPrefix(prefix: string): Promise<ApiKeyRow | undefined> {
+    return this.db.prepare("SELECT * FROM api_keys WHERE prefix LIKE ? || '%'").get(prefix) as any
   }
 
-  listApiKeys(): ApiKeyRow[] {
+  async listApiKeys(): Promise<ApiKeyRow[]> {
     return this.db.prepare("SELECT * FROM api_keys ORDER BY created_at").all() as any
   }
 
-  revokeApiKey(id: string): void {
+  async revokeApiKey(id: string): Promise<void> {
     this.db.prepare("UPDATE api_keys SET is_active = 0 WHERE id = ?").run(id)
   }
 
-  updateLastUsed(id: string): void {
-    this.db
-      .prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?")
-      .run(id)
+  async updateLastUsed(id: string): Promise<void> {
+    this.db.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?").run(id)
   }
 
-  // ── Usage Logs ──
-
-  logUsage(
-    keyId: string,
-    path: string,
-    method: string,
-    statusCode: number,
-    latencyMs: number,
-    ipAddress: string
-  ): void {
-    const id = uuid()
-    this.db
-      .prepare(
-        `INSERT INTO usage_logs (id, key_id, path, method, status_code, latency_ms, ip_address)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(id, keyId, path, method, statusCode, latencyMs, ipAddress)
+  async logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<void> {
+    this.db.prepare("INSERT INTO usage_logs (id, key_id, path, method, status_code, latency_ms, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)").run(uuid(), keyId, path, method, statusCode, latencyMs, ipAddress)
   }
 
-  // ── Stats ──
-
-  getStats(): {
-    orgCount: number
-    totalKeys: number
-    activeKeys: number
-    totalRequests: number
-    recentRequests: number
-    errorCount: number
-    topKeys: { label: string; prefix: string; requests: number }[]
-  } {
+  async getStats(): Promise<{ orgCount: number; totalKeys: number; activeKeys: number; totalRequests: number; recentRequests: number; errorCount: number; topKeys: { label: string; prefix: string; requests: number }[] }> {
     const orgCount = (this.db.prepare("SELECT COUNT(*) as c FROM organizations").get() as any).c
     const totalKeys = (this.db.prepare("SELECT COUNT(*) as c FROM api_keys").get() as any).c
     const activeKeys = (this.db.prepare("SELECT COUNT(*) as c FROM api_keys WHERE is_active = 1").get() as any).c
     const totalRequests = (this.db.prepare("SELECT COUNT(*) as c FROM usage_logs").get() as any).c
-
     const d = new Date(Date.now() - 3600 * 1000)
     const pad = (n: number) => String(n).padStart(2, "0")
     const oneHourAgo = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`
-    const recentRequests = (
-      this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE timestamp >= ?").get(oneHourAgo) as any
-    ).c
-    const errorCount = (
-      this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE status_code >= 400").get() as any
-    ).c
-
-    const topKeys = this.db
-      .prepare(
-        `SELECT ak.label, ak.prefix, COUNT(ul.id) as requests
-         FROM usage_logs ul
-         JOIN api_keys ak ON ak.id = ul.key_id
-         GROUP BY ak.id, ak.label, ak.prefix
-         ORDER BY requests DESC
-         LIMIT 5`
-      )
-      .all() as any
-
+    const recentRequests = (this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE timestamp >= ?").get(oneHourAgo) as any).c
+    const errorCount = (this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE status_code >= 400").get() as any).c
+    const topKeys = this.db.prepare("SELECT ak.label, ak.prefix, COUNT(ul.id) as requests FROM usage_logs ul JOIN api_keys ak ON ak.id = ul.key_id GROUP BY ak.id, ak.label, ak.prefix ORDER BY requests DESC LIMIT 5").all() as any
     return { orgCount, totalKeys, activeKeys, totalRequests, recentRequests, errorCount, topKeys }
   }
 
-  // ── Route Limits ──
-
-  listRouteLimits(orgId: string): RouteLimitRow[] {
-    return this.db
-      .prepare("SELECT * FROM route_limits WHERE org_id = ? ORDER BY path")
-      .all(orgId) as any
+  async listRouteLimits(orgId: string): Promise<RouteLimitRow[]> {
+    return this.db.prepare("SELECT * FROM route_limits WHERE org_id = ? ORDER BY path").all(orgId) as any
   }
 
-  getRouteLimit(orgId: string, path: string, method: string): RouteLimitRow | undefined {
-    return this.db
-      .prepare("SELECT * FROM route_limits WHERE org_id = ? AND path = ? AND (method = ? OR method = 'ALL') ORDER BY method DESC LIMIT 1")
-      .get(orgId, path, method) as any
+  async getRouteLimit(orgId: string, path: string, method: string): Promise<RouteLimitRow | undefined> {
+    return this.db.prepare("SELECT * FROM route_limits WHERE org_id = ? AND path = ? AND (method = ? OR method = 'ALL') ORDER BY method DESC LIMIT 1").get(orgId, path, method) as any
   }
 
-  upsertRouteLimit(orgId: string, path: string, method: string, maxRequests: number, windowSeconds: number): RouteLimitRow {
-    const existing = this.db
-      .prepare("SELECT id FROM route_limits WHERE org_id = ? AND path = ? AND method = ?")
-      .get(orgId, path, method) as any
+  async upsertRouteLimit(orgId: string, path: string, method: string, maxRequests: number, windowSeconds: number): Promise<RouteLimitRow> {
+    const existing = this.db.prepare("SELECT id FROM route_limits WHERE org_id = ? AND path = ? AND method = ?").get(orgId, path, method) as any
     if (existing) {
-      this.db
-        .prepare("UPDATE route_limits SET max_requests = ?, window_seconds = ? WHERE id = ?")
-        .run(maxRequests, windowSeconds, existing.id)
+      this.db.prepare("UPDATE route_limits SET max_requests = ?, window_seconds = ? WHERE id = ?").run(maxRequests, windowSeconds, existing.id)
       return this.db.prepare("SELECT * FROM route_limits WHERE id = ?").get(existing.id) as any
     }
     const id = uuid()
-    this.db
-      .prepare("INSERT INTO route_limits (id, org_id, path, method, max_requests, window_seconds) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(id, orgId, path, method, maxRequests, windowSeconds)
+    this.db.prepare("INSERT INTO route_limits (id, org_id, path, method, max_requests, window_seconds) VALUES (?, ?, ?, ?, ?, ?)").run(id, orgId, path, method, maxRequests, windowSeconds)
     return this.db.prepare("SELECT * FROM route_limits WHERE id = ?").get(id) as any
   }
 
-  deleteRouteLimit(id: string): void {
+  async deleteRouteLimit(id: string): Promise<void> {
     this.db.prepare("DELETE FROM route_limits WHERE id = ?").run(id)
   }
 
-  // ── Admin Tokens ──
-
-  createAdminToken(label: string, tokenHash: string, role: string, orgId?: string): AdminTokenRow {
+  async createAdminToken(label: string, tokenHash: string, role: string, orgId?: string): Promise<AdminTokenRow> {
     const id = uuid()
-    this.db
-      .prepare("INSERT INTO admin_tokens (id, label, token_hash, role, org_id) VALUES (?, ?, ?, ?, ?)")
-      .run(id, label, tokenHash, role, orgId ?? null)
+    this.db.prepare("INSERT INTO admin_tokens (id, label, token_hash, role, org_id) VALUES (?, ?, ?, ?, ?)").run(id, label, tokenHash, role, orgId ?? null)
     return this.db.prepare("SELECT * FROM admin_tokens WHERE id = ?").get(id) as any
   }
 
-  findAdminTokenByHash(tokenHash: string): AdminTokenRow | undefined {
+  async findAdminTokenByHash(tokenHash: string): Promise<AdminTokenRow | undefined> {
     return this.db.prepare("SELECT * FROM admin_tokens WHERE token_hash = ?").get(tokenHash) as any
   }
 
-  listAdminTokens(): AdminTokenRow[] {
+  async listAdminTokens(): Promise<AdminTokenRow[]> {
     return this.db.prepare("SELECT * FROM admin_tokens ORDER BY created_at").all() as any
   }
 
-  revokeAdminToken(id: string): void {
+  async revokeAdminToken(id: string): Promise<void> {
     this.db.prepare("DELETE FROM admin_tokens WHERE id = ?").run(id)
   }
 
-  updateAdminTokenLastUsed(id: string): void {
-    this.db
-      .prepare("UPDATE admin_tokens SET last_used_at = datetime('now') WHERE id = ?")
-      .run(id)
+  async updateAdminTokenLastUsed(id: string): Promise<void> {
+    this.db.prepare("UPDATE admin_tokens SET last_used_at = datetime('now') WHERE id = ?").run(id)
   }
 
-  // ── Admin Audit Log ──
-
-  logAdminAction(adminTokenId: string | null, action: string, targetType: string, targetId: string, ipAddress: string): void {
-    this.db
-      .prepare("INSERT INTO admin_audit_log (id, admin_token_id, action, target_type, target_id, ip_address) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(uuid(), adminTokenId, action, targetType, targetId, ipAddress)
+  async logAdminAction(adminTokenId: string | null, action: string, targetType: string, targetId: string, ipAddress: string): Promise<void> {
+    this.db.prepare("INSERT INTO admin_audit_log (id, admin_token_id, action, target_type, target_id, ip_address) VALUES (?, ?, ?, ?, ?, ?)").run(uuid(), adminTokenId, action, targetType, targetId, ipAddress)
   }
 
-  getAdminAuditLog(limit = 50): AdminAuditLogRow[] {
-    return this.db
-      .prepare("SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT ?")
-      .all(limit) as any
+  async getAdminAuditLog(limit = 50): Promise<AdminAuditLogRow[]> {
+    return this.db.prepare("SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT ?").all(limit) as any
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close()
   }
 }

@@ -24,10 +24,10 @@ function getKg(args: { db?: string; redis?: string; secret?: string }): KeyGuard
 program
   .command("init")
   .description("Initialize database tables")
-  .action((_args, cmd) => {
+  .action(async (_args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
     console.log(`${chalk.green("✓")} Database initialized: ${kg.config.databaseUrl}`)
   })
 
@@ -35,18 +35,18 @@ program
   .command("create-org")
   .description("Create an organization")
   .argument("<name>", "Organization name")
-  .action((name: string, _args, cmd) => {
+  .action(async (name: string, _args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const existing = kg.db.findOrganizationByName(name)
+    const existing = await kg.db.findOrganizationByName(name)
     if (existing) {
       console.log(`${chalk.red("✗")} Organization '${name}' already exists.`)
       process.exit(1)
     }
 
-    const org = kg.db.createOrganization(name)
+    const org = await kg.db.createOrganization(name)
     console.log(`${chalk.green("✓")} Organization created:`)
     console.log(`  Name: ${org.name}`)
     console.log(`  ID:   ${org.id}`)
@@ -60,12 +60,12 @@ program
   .option("--prefix <prefix>", "Key prefix", "kg_live_")
   .option("--rate-limit <n>", "Requests per minute", parseInt)
   .option("--scopes <scopes>", "Comma-separated scopes", "read")
-  .action((args, cmd) => {
+  .action(async (args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const org = kg.db.findOrganizationByName(args.org)
+    const org = await kg.db.findOrganizationByName(args.org)
     if (!org) {
       console.log(`${chalk.red("✗")} Organization '${args.org}' not found.`)
       console.log(`  Create one first: keyguard create-org "${args.org}"`)
@@ -76,7 +76,7 @@ program
     const rateLimit = args.rateLimit || kg.config.defaultRateLimitPerMinute
     const scopes = args.scopes.split(",").map((s: string) => s.trim())
 
-    const apiKey = kg.db.createApiKey({
+    const apiKey = await kg.db.createApiKey({
       org_id: org.id,
       label: args.label,
       prefix: rawKey.slice(0, 20),
@@ -102,12 +102,12 @@ program
 program
   .command("list-orgs")
   .description("List all organizations")
-  .action((_args, cmd) => {
+  .action(async (_args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const orgs = kg.db.listOrganizations()
+    const orgs = await kg.db.listOrganizations()
     if (orgs.length === 0) {
       console.log("No organizations found. Create one:")
       console.log("  keyguard create-org \"My Company\"")
@@ -126,12 +126,12 @@ program
 program
   .command("list-keys")
   .description("List all API keys")
-  .action((_args, cmd) => {
+  .action(async (_args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const keys = kg.db.listApiKeys()
+    const keys = await kg.db.listApiKeys()
     if (keys.length === 0) {
       console.log("No API keys found. Create one:")
       console.log('  keyguard create-key --org "My Org" --label "my-key"')
@@ -145,7 +145,7 @@ program
     console.log("─".repeat(110))
     for (const k of keys) {
       const status = k.is_active ? "active" : "revoked"
-      const org = kg.db.getOrganization(k.org_id)
+      const org = await kg.db.getOrganization(k.org_id)
       const orgName = org?.name || "—"
       const lastUsed = k.last_used_at || "never"
       console.log(
@@ -159,12 +159,12 @@ program
   .command("revoke-key")
   .description("Revoke an API key by prefix")
   .argument("<prefix>", "Key prefix to revoke")
-  .action((prefix: string, _args, cmd) => {
+  .action(async (prefix: string, _args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const key = kg.db.findApiKeyByPrefix(prefix)
+    const key = await kg.db.findApiKeyByPrefix(prefix)
     if (!key) {
       console.log(`${chalk.red("✗")} No key found with prefix '${prefix}'`)
       process.exit(1)
@@ -175,19 +175,19 @@ program
       return
     }
 
-    kg.db.revokeApiKey(key.id)
+    await kg.db.revokeApiKey(key.id)
     console.log(`${chalk.green("✓")} Key '${key.label}' (prefix: ${key.prefix}) has been revoked.`)
   })
 
 program
   .command("stats")
   .description("Show usage statistics")
-  .action((_args, cmd) => {
+  .action(async (_args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
-    kg.initDb()
+    await kg.initDb()
 
-    const s = kg.db.getStats()
+    const s = await kg.db.getStats()
     const errorRate = s.totalRequests > 0 ? ((s.errorCount / s.totalRequests) * 100).toFixed(1) : "0.0"
 
     console.log()

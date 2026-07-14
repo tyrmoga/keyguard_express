@@ -21,7 +21,7 @@ function audit(kg: KeyGuard, req: Request, adminTokenId: string | null, action: 
 export function createAdminRouter(kg: KeyGuard): Router {
   const router = Router()
 
-  function verifyAdmin(req: Request, res: Response, next: () => void): void {
+  async function verifyAdmin(req: Request, res: Response, next: () => void): Promise<void> {
     const key = req.headers["x-admin-key"] as string | undefined
     if (!key) {
       res.status(403).json({ detail: "Invalid admin key." })
@@ -37,7 +37,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
 
     // Check stored admin tokens
     const tokenHash = crypto.createHash("sha256").update(key).digest("hex")
-    const token = kg.db.findAdminTokenByHash(tokenHash)
+    const token = await kg.db.findAdminTokenByHash(tokenHash)
     if (!token) {
       res.status(403).json({ detail: "Invalid admin key." })
       return
@@ -83,14 +83,14 @@ export function createAdminRouter(kg: KeyGuard): Router {
 
   // ── Organizations ──
 
-  router.post("/orgs", verifyAdmin, requireOwner, (req: Request, res: Response) => {
+  router.post("/orgs", verifyAdmin, requireOwner, async (req: Request, res: Response) => {
     const parsed = OrgCreateSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
 
-    const existing = kg.db.findOrganizationByName(parsed.data.name)
+    const existing = await kg.db.findOrganizationByName(parsed.data.name)
     if (existing) return void res.status(400).json({ detail: `Organization '${parsed.data.name}' already exists.` })
 
-    const org = kg.db.createOrganization(parsed.data.name)
+    const org = await kg.db.createOrganization(parsed.data.name)
     audit(kg, req, (req as any).adminTokenId, "create_org", "organization", org.id)
     res.status(201).json({
       id: org.id,
@@ -101,8 +101,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
     })
   })
 
-  router.get("/orgs", verifyAdmin, requireOwner, (_req: Request, res: Response) => {
-    const orgs = kg.db.listOrganizations()
+  router.get("/orgs", verifyAdmin, requireOwner, async (_req: Request, res: Response) => {
+    const orgs = await kg.db.listOrganizations()
     res.json({
       organizations: orgs.map((o) => ({
         id: o.id,
@@ -117,12 +117,12 @@ export function createAdminRouter(kg: KeyGuard): Router {
 
   // ── API Keys ──
 
-  router.post("/keys", verifyAdmin, requireOrgAccess, (req: Request, res: Response) => {
+  router.post("/keys", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
     const parsed = KeyCreateSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
 
     const orgName = parsed.data.org_name
-    const org = kg.db.findOrganizationByName(orgName)
+    const org = await kg.db.findOrganizationByName(orgName)
     if (!org) return void res.status(404).json({ detail: `Organization '${orgName}' not found.` })
 
     // org_admin scoped to a different org
@@ -132,7 +132,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
     }
 
     const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey(parsed.data.prefix)
-    const apiKey = kg.db.createApiKey({
+    const apiKey = await kg.db.createApiKey({
       org_id: org.id,
       label: parsed.data.label,
       prefix: rawKey.slice(0, 20),
@@ -161,10 +161,10 @@ export function createAdminRouter(kg: KeyGuard): Router {
     })
   })
 
-  router.get("/keys", verifyAdmin, requireOwner, (_req: Request, res: Response) => {
-    const keys = kg.db.listApiKeys()
-    const items = keys.map((k) => {
-      const org = kg.db.getOrganization(k.org_id)
+  router.get("/keys", verifyAdmin, requireOwner, async (_req: Request, res: Response) => {
+    const keys = await kg.db.listApiKeys()
+    const items = await Promise.all(keys.map(async (k) => {
+      const org = await kg.db.getOrganization(k.org_id)
       return {
         id: k.id,
         label: k.label,
@@ -178,18 +178,18 @@ export function createAdminRouter(kg: KeyGuard): Router {
         created_at: k.created_at,
         last_used_at: k.last_used_at,
       }
-    })
+    }))
     res.json({ keys: items, total: items.length })
   })
 
-  router.post("/keys/:keyId/rotate", verifyAdmin, requireOrgAccess, (req: Request, res: Response) => {
-    const oldKey = kg.db.getApiKey(req.params.keyId)
+  router.post("/keys/:keyId/rotate", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
+    const oldKey = await kg.db.getApiKey(req.params.keyId)
     if (!oldKey) return void res.status(404).json({ detail: "Key not found." })
 
     const parsed = RotationSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
 
-    const newKey = kg.db.getApiKey(parsed.data.target_key_id)
+    const newKey = await kg.db.getApiKey(parsed.data.target_key_id)
     if (!newKey) return void res.status(404).json({ detail: "Target key not found." })
 
     if (oldKey.id === newKey.id) {
@@ -204,8 +204,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
     res.json({ detail: `Key '${oldKey.label}' now rotates to '${newKey.label}'.` })
   })
 
-  router.delete("/keys/:keyId", verifyAdmin, requireOrgAccess, (req: Request, res: Response) => {
-    const key = kg.db.getApiKey(req.params.keyId)
+  router.delete("/keys/:keyId", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
+    const key = await kg.db.getApiKey(req.params.keyId)
     if (!key) return void res.status(404).json({ detail: "Key not found." })
 
     kg.db.revokeApiKey(key.id)
@@ -215,15 +215,15 @@ export function createAdminRouter(kg: KeyGuard): Router {
 
   // ── Route Limits ──
 
-  router.get("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, (req: Request, res: Response) => {
-    const org = kg.db.getOrganization(req.params.orgId)
+  router.get("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
+    const org = await kg.db.getOrganization(req.params.orgId)
     if (!org) return void res.status(404).json({ detail: "Organization not found." })
-    const limits = kg.db.listRouteLimits(org.id)
+    const limits = await kg.db.listRouteLimits(org.id)
     res.json({ route_limits: limits })
   })
 
-  router.put("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, (req: Request, res: Response) => {
-    const org = kg.db.getOrganization(req.params.orgId)
+  router.put("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
+    const org = await kg.db.getOrganization(req.params.orgId)
     if (!org) return void res.status(404).json({ detail: "Organization not found." })
     const schema = z.object({
       path: z.string().min(1),
@@ -233,21 +233,21 @@ export function createAdminRouter(kg: KeyGuard): Router {
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
-    const rl = kg.db.upsertRouteLimit(org.id, parsed.data.path, parsed.data.method, parsed.data.max_requests, parsed.data.window_seconds)
+    const rl = await kg.db.upsertRouteLimit(org.id, parsed.data.path, parsed.data.method, parsed.data.max_requests, parsed.data.window_seconds)
     audit(kg, req, (req as any).adminTokenId, "set_route_limit", "route_limit", rl.id)
     res.json(rl)
   })
 
-  router.delete("/route-limits/:id", verifyAdmin, requireOwner, (req: Request, res: Response) => {
-    kg.db.deleteRouteLimit(req.params.id)
+  router.delete("/route-limits/:id", verifyAdmin, requireOwner, async (req: Request, res: Response) => {
+    await kg.db.deleteRouteLimit(req.params.id)
     audit(kg, req, (req as any).adminTokenId, "delete_route_limit", "route_limit", req.params.id)
     res.json({ detail: "Route limit deleted." })
   })
 
   // ── Stats ──
 
-  router.get("/stats", verifyAdmin, requireOwner, (_req: Request, res: Response) => {
-    const s = kg.db.getStats()
+  router.get("/stats", verifyAdmin, requireOwner, async (_req: Request, res: Response) => {
+    const s = await kg.db.getStats()
     const errorRate = s.totalRequests > 0 ? parseFloat(((s.errorCount / s.totalRequests) * 100).toFixed(2)) : 0.0
     res.json({
       total_organizations: s.orgCount,
@@ -268,20 +268,20 @@ export function createAdminRouter(kg: KeyGuard): Router {
     org_name: z.string().optional(),
   })
 
-  router.post("/admin-tokens", verifyAdmin, requireOwner, (req: Request, res: Response) => {
+  router.post("/admin-tokens", verifyAdmin, requireOwner, async (req: Request, res: Response) => {
     const parsed = AdminTokenCreateSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
 
     let orgId: string | undefined
     if (parsed.data.org_name) {
-      const org = kg.db.findOrganizationByName(parsed.data.org_name)
+      const org = await kg.db.findOrganizationByName(parsed.data.org_name)
       if (!org) return void res.status(404).json({ detail: `Organization '${parsed.data.org_name}' not found.` })
       orgId = org.id
     }
 
     const rawToken = crypto.randomBytes(32).toString("base64url")
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex")
-    const token = kg.db.createAdminToken(parsed.data.label, tokenHash, parsed.data.role, orgId)
+    const token = await kg.db.createAdminToken(parsed.data.label, tokenHash, parsed.data.role, orgId)
 
     audit(kg, req, (req as any).adminTokenId, "create_admin_token", "admin_token", token.id)
     res.status(201).json({
@@ -294,22 +294,22 @@ export function createAdminRouter(kg: KeyGuard): Router {
     })
   })
 
-  router.get("/admin-tokens", verifyAdmin, requireOwner, (_req: Request, res: Response) => {
-    const tokens = kg.db.listAdminTokens()
+  router.get("/admin-tokens", verifyAdmin, requireOwner, async (_req: Request, res: Response) => {
+    const tokens = await kg.db.listAdminTokens()
     res.json({ tokens, total: tokens.length })
   })
 
-  router.delete("/admin-tokens/:id", verifyAdmin, requireOwner, (req: Request, res: Response) => {
-    kg.db.revokeAdminToken(req.params.id)
+  router.delete("/admin-tokens/:id", verifyAdmin, requireOwner, async (req: Request, res: Response) => {
+    await kg.db.revokeAdminToken(req.params.id)
     audit(kg, req, (req as any).adminTokenId, "revoke_admin_token", "admin_token", req.params.id)
     res.json({ detail: "Admin token revoked." })
   })
 
   // ── Audit Log ──
 
-  router.get("/audit-log", verifyAdmin, requireOwner, (req: Request, res: Response) => {
+  router.get("/audit-log", verifyAdmin, requireOwner, async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string, 10) || 50
-    const entries = kg.db.getAdminAuditLog(limit)
+    const entries = await kg.db.getAdminAuditLog(limit)
     res.json({ entries, total: entries.length })
   })
 

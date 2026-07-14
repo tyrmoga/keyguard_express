@@ -29,8 +29,8 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
 
       // 3. Auth Check
       const keyHash = kg.auth.hashKey(apiKeyRaw)
-      const keyObj = kg.db.findApiKeyByHash(keyHash)
-      const org = keyObj ? kg.db.getOrganization(keyObj.org_id) : undefined
+      const keyObj = await kg.db.findApiKeyByHash(keyHash)
+      const org = keyObj ? await kg.db.getOrganization(keyObj.org_id) : undefined
 
       if (!keyObj || !keyObj.is_active || !org || org.status !== "active") {
         await kg.rateLimiting.trackIpAbuse(ipAddress, kg.config.ipBlockThreshold)
@@ -72,7 +72,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
 
       // 3d. Per-route limit check
       if (org) {
-        const routeLimit = kg.db.getRouteLimit(org.id, req.path, req.method)
+        const routeLimit = await kg.db.getRouteLimit(org.id, req.path, req.method)
         if (routeLimit) {
           const { limited } = await kg.rateLimiting.isRateLimited(`route:${routeLimit.id}`, routeLimit.max_requests, routeLimit.window_seconds)
           if (limited) {
@@ -83,7 +83,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
 
       // 4. Monthly Limit Check
       if (keyObj.monthly_limit) {
-        const monthlyUsage = kg.db.getMonthlyUsage(keyObj.id)
+        const monthlyUsage = await kg.db.getMonthlyUsage(keyObj.id)
         if (monthlyUsage >= keyObj.monthly_limit) {
           setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 429, 0, ipAddress))
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
