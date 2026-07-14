@@ -220,7 +220,7 @@ Replay-protection nonces are stored in a `Map` scoped to the current Node proces
 `corsMiddleware(kg)` delegates to the `cors` package with no origin restriction. Configure origins via the `options` parameter: `corsMiddleware(kg, { origin: "https://myapp.com" })`.
 
 **IP controls require `trust proxy` behind a reverse proxy.**
-`clientIp()` reads `X-Forwarded-For` when present. Express's `req.ip` (the fallback) only reflects the real client IP if `app.set('trust proxy', 1)` is configured. Without it, all clients behind nginx/Cloudflare/LB share one IP for rate-limiting and blocking purposes.
+`clientIp()` reads `X-Forwarded-For` only when Express's `app.set('trust proxy', ...)` is configured. Without it, `req.ip` (the direct TCP peer) is used, and all clients behind nginx/Cloudflare/LB share one IP. To get real client IPs behind a proxy, call `app.set('trust proxy', 1)` or `app.set('trust proxy', 'loopback')`.
 
 **The default database is SQLite, which doesn't survive multi-instance deployments.**
 Two Node processes sharing a SQLite file with the in-memory rate limiter will each have independent rate-limit state and may contend on WAL checkpoints. For multi-instance: use the Postgres backend + Redis.

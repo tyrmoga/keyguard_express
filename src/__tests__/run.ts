@@ -29,15 +29,17 @@ console.log("PASS secondsUntilTime — fallback on invalid✓")
 
 // ── clientIp ──
 
-function mockReq(ip: string | undefined, forwarded: string | undefined, remote: string): any {
+function mockReq(ip: string | undefined, forwarded: string | undefined, remote: string, trustProxy = false): any {
   return {
     ip,
+    app: { get: () => trustProxy },
     headers: forwarded ? { "x-forwarded-for": forwarded } : {},
     socket: { remoteAddress: remote },
   }
 }
-assert.strictEqual(clientIp(mockReq("1.2.3.4", undefined, "5.6.7.8")), "1.2.3.4", "trust-proxy ip")
-assert.strictEqual(clientIp(mockReq(undefined, "9.10.11.12, 13.14.15.16", "5.6.7.8")), "9.10.11.12", "x-forwarded-for first")
+assert.strictEqual(clientIp(mockReq("1.2.3.4", undefined, "5.6.7.8")), "1.2.3.4", "req.ip (no trust proxy)")
+assert.strictEqual(clientIp(mockReq(undefined, "9.10.11.12, 13.14.15.16", "5.6.7.8", true)), "9.10.11.12", "x-forwarded-for (trust proxy enabled)")
+assert.strictEqual(clientIp(mockReq(undefined, "9.10.11.12", "5.6.7.8")), "5.6.7.8", "xff ignored without trust proxy")
 assert.strictEqual(clientIp(mockReq(undefined, undefined, "5.6.7.8")), "5.6.7.8", "socket fallback")
 assert.strictEqual(clientIp(mockReq(undefined, undefined, "")), "unknown", "unknown fallback")
 console.log("PASS clientIp✓")

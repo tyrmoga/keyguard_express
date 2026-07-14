@@ -84,13 +84,14 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         }
       }
 
-      // 4. Monthly Limit Check
+      // 4. Monthly Limit Check (log INSERT precedes count to close TOCTOU race)
       if (keyObj.monthly_limit) {
+        await kg.db.logUsage(keyObj.id, req.path, req.method, 0, 0, ipAddress)
         const monthlyUsage = await kg.db.getMonthlyUsage(keyObj.id)
-        if (monthlyUsage >= keyObj.monthly_limit) {
-          setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 429, 0, ipAddress))
+        if (monthlyUsage > keyObj.monthly_limit) {
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
         }
+        ;(req as any)._kgAlreadyLogged = true
       }
 
       // 5. Rate Limiting
@@ -113,11 +114,17 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       }
 
       // 7. Capture response for logging (deferred — don't block the event loop)
+      // If already logged at step 4 (monthly check), skip duplicate logUsage
+      const alreadyLogged = !!(req as any)._kgAlreadyLogged
       const originalSend = res.send.bind(res)
       res.send = function (body: any): Response {
         const latency = Date.now() - startTime
+        if (!alreadyLogged) {
+          setImmediate(() => {
+            kg.db.logUsage(keyObj.id, req.path, req.method, res.statusCode, latency, ipAddress)
+          })
+        }
         setImmediate(() => {
-          kg.db.logUsage(keyObj.id, req.path, req.method, res.statusCode, latency, ipAddress)
           kg.db.updateLastUsed(keyObj.id)
         })
 
