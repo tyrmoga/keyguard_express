@@ -233,35 +233,34 @@ See [`issues.md`](issues.md) for the full issue history and fix log.
 
 ## Security
 
-### Threat model
-
-KeyGuard Express is designed for server-to-server API authentication. It assumes:
-
-- The server environment is trusted (secrets in `.env` are not exposed to unauthorized processes).
-- Network traffic is encrypted (TLS) — API keys in headers are visible in plaintext over HTTP.
-- The database file (SQLite) or Postgres instance is on a trusted, access-controlled filesystem or network.
-- Administrative access (the `/admin` endpoints and CLI) is restricted to authorized operators.
-
-It is **not** designed for:
-
-- Browser-based API key storage (keys are shown once and should be stored securely server-side).
-- Direct end-user authentication (use OAuth, sessions, or JWTs for user-facing auth).
+KeyGuard Express is a **drop-in security suite** for your Express API. It handles authentication, authorization, rate limiting, abuse prevention, and webhook verification — all in one dependency. You pair it with your existing user auth layer (Passport.js, NextAuth, OAuth, sessions, JWTs). They handle users; KeyGuard handles machines.
 
 ### How API keys work
 
-- Keys are generated as `kg_live_<43 random base64url chars>` (~256 bits of entropy).
-- They are never stored in plaintext. The database stores `SHA-256(key + pepper)` for lookup and `PBKDF2-SHA512(key, salt + pepper)` with 100k iterations for offline-cracking resistance.
-- The raw key is returned exactly once — at creation time via the admin API or CLI.
-- Keys authenticate via the `X-API-KEY` header. Comparison uses `crypto.timingSafeEqual` against the stretched hash.
+Keys are credentials for **programmatic access** — your backend services, CI/CD pipelines, or third-party integrations call your API with `X-API-KEY: <key>`. The key is generated as `kg_live_<43 random base64url chars>` (~256 bits of entropy), never stored in plaintext, and returned exactly once at creation. The database stores `SHA-256(key + pepper)` for lookup and `PBKDF2-SHA512(key, salt + pepper)` with 100k iterations for offline-cracking resistance. Comparison uses `crypto.timingSafeEqual`.
 
-### Admin API
+For **user-facing routes** (login form, React SPA, mobile app), you don't use API keys at all. The pattern is:
 
-- Protected by `X-Admin-Key` header verified with `crypto.timingSafeEqual` against the global admin key or stored admin tokens.
-- Scoped admin tokens (`org_admin` role) can manage only their assigned organization.
-- All admin actions are logged to `admin_audit_log` with IP and timestamp.
-- The global `KG_ADMIN_KEY` is auto-generated on first run and persisted to `.env`.
+```
+React POSTs credentials → Your backend authenticates the user →
+Your backend attaches X-API-KEY to call your internal API
+```
 
-### Rate limiting and abuse prevention
+The `/login` endpoint itself is a **public route** — protect it against brute-force with `rateLimitByIp(kg, 5, 60, 3600)`, no API key required from the client.
+
+### Threat model assumptions
+
+**"The server environment is trusted"** means KeyGuard relies on standard server-hardening practices outside the library's scope: restricted file permissions on `.env`, no debug endpoints exposing config, no accidental `console.log` of secrets. The library never writes secrets to logs — the raw key is shown exactly once at creation (admin API response or CLI output), never echoed on subsequent requests. The `console.warn` banner for auto-generated keys prints to stderr during startup, not in request-response logging.
+
+**"Network traffic is encrypted (TLS)"** means API keys in the `X-API-KEY` header are visible in plaintext to anyone on the network without HTTPS. KeyGuard does not enforce TLS — that's your reverse proxy or Express's job (`https.createServer`, nginx, Cloudflare). The library ships a helmet preset via `app.use(headers())` that sets `Strict-Transport-Security` (HSTS) to force TLS at the browser level.
+
+**"The database is on a trusted filesystem or network"** means the SQLite file or Postgres instance stores key hashes — an attacker with DB access can read labels, org names, and usage patterns, but cracking an API key's PBKDF2 hash with 100k iterations is computationally expensive even with the pepper. The library assumes you control database access. For Postgres, use a dedicated user with least-privilege credentials.
+
+**"Admin access is restricted to authorized operators"** means the global `KG_ADMIN_KEY` is auto-generated with 256 bits of entropy and verified with timing-safe comparison. Scoped `org_admin` tokens confine management to a single org. All admin actions are logged to `admin_audit_log`. No endpoint is exposed unauthenticated. But if the `KG_ADMIN_KEY` or an admin token leaks, an attacker can create unlimited API keys — guard the admin endpoints like any other credential.
+
+**"API keys must not be embedded in client-side code"** means your React, mobile, or desktop app should never carry an API key — it's visible in DevTools, network inspectors, decompiled bundles, and source maps. Keys live in server-side environment variables or secret managers. Your frontend authenticates through your user auth layer; your backend attaches the API key when calling downstream services.
+
+### Abuse prevention
 
 - Per-key rate limiting uses a sliding window (mutex-clocked in memory, atomic ZSET operations in Redis).
 - IP-based rate limiting (`rateLimitByIp`) is available for public endpoints like `/login`.
@@ -270,14 +269,14 @@ It is **not** designed for:
 
 ### HMAC webhook verification
 
-- Verifies `X-Signature`, `X-Timestamp`, `X-Nonce` headers.
-- Rejects requests outside the clock-skew window (default: 300s).
-- Nonces are deduplicated within the skew window (in-memory per process).
-- Use with external webhook providers or for internal service-to-service signing.
+- Verifies `X-Signature`, `X-Timestamp`, `X-Nonce` headers with `crypto.timingSafeEqual`.
+- Length guard prevents exception on mismatched signature sizes.
+- Rejects requests with clock skew > 300s (configurable). Nonces deduplicated within the window (in-memory per process).
+- Use with external webhook providers or for internal service-to-service request signing.
 
 ### Reporting vulnerabilities
 
-To report a security vulnerability, open an issue on the GitHub repository or contact the maintainers directly. Do not disclose vulnerabilities publicly until they are addressed.
+Open an issue on the GitHub repository or contact the maintainers directly. Do not disclose vulnerabilities publicly until they are addressed.
 
 ## License
 
