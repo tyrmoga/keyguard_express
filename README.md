@@ -56,20 +56,7 @@ KeyGuard auto-detects backends:
 
 For IP-based controls behind a reverse proxy (nginx, Cloudflare, LB), call `app.set('trust proxy', 1)` before mounting middleware.
 
-## Status of Known Issues
-
-Most inherited bugs from the original Python codebase have been fixed. Remaining limitations:
-
-| Severity | Issue | Status |
-|----------|-------|--------|
-| HIGH | Weak SHA-256 hashing (no per-key salt, no KDF) | Open — needs bcrypt/PBKDF2 |
-| HIGH | Zero test coverage | Open |
-| LOW | Reverse proxy IP controls require consumer `app.set('trust proxy', ...)` | Open |
-| MEDIUM | Memory leak — `cleanup()` never called | **Fixed** — `setInterval` in constructor prunes stale entries every 2min |
-| LOW | Usage logs only capture authorized requests | **Fixed** — expired, monthly-capped, and rate-limited requests now logged |
-| LOW | Key prefix collisions (24-bit entropy) | **Fixed** — prefix length increased to 20 chars (72-bit entropy) |
-
-For the full issue history and all fixed items, see [`issues.md`](issues.md).
+See [`issues.md`](issues.md) for the full list of known issues, fix status, and remaining open items.
 
 ## License
 
