@@ -27,6 +27,7 @@ export interface ApiKeyRow {
   created_at: string | null
   expires_at?: string | null
   last_used_at?: string | null
+  rotates_to_id?: string | null
 }
 
 export interface CreateApiKeyInput {

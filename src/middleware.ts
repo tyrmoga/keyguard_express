@@ -34,9 +34,12 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         return void res.status(401).json({ detail: "Invalid or inactive API Key." })
       }
 
-      // 3a. Expiry Check
-      if (keyObj.expires_at && new Date(keyObj.expires_at) <= new Date()) {
-        return void res.status(401).json({ detail: "API Key has expired." })
+      // 3a. Expiry Check (fail closed — unparseable dates treated as expired)
+      if (keyObj.expires_at) {
+        const expiresAt = new Date(keyObj.expires_at)
+        if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+          return void res.status(401).json({ detail: "API Key has expired." })
+        }
       }
 
       // 3b. Monthly Limit Check
@@ -59,6 +62,11 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       // 5. Attach key to request
       ;(req as any).apiKey = keyObj
       ;(req as any).organization = org
+
+      // 5a. Deprecation header if key is being rotated
+      if (keyObj.rotates_to_id) {
+        res.set("X-Key-Deprecated", `rotates-to=${keyObj.rotates_to_id}`)
+      }
 
       // 6. Capture response for logging (deferred — don't block the event loop)
       const originalSend = res.send.bind(res)

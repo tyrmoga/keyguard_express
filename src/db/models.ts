@@ -54,8 +54,18 @@ export class KeyGuardDb {
     this.db.pragma("foreign_keys = ON")
   }
 
+  private migrate(): void {
+    const columns = this.db.pragma("table_info(api_keys)") as any[]
+    const hasColumn = (name: string) => columns.some((c: any) => c.name === name)
+
+    if (!hasColumn("rotates_to_id")) {
+      this.db.exec("ALTER TABLE api_keys ADD COLUMN rotates_to_id TEXT REFERENCES api_keys(id)")
+    }
+  }
+
   init(): void {
     this.db.exec(SCHEMA)
+    this.migrate()
   }
 
   // ── Organizations ──
@@ -86,7 +96,7 @@ export class KeyGuardDb {
   // ── API Keys ──
 
   createApiKey(row: CreateApiKeyInput): ApiKeyRow {
-    const id = row.rotates_to_id ? uuid() : uuid()
+    const id = uuid()
     this.db
       .prepare(
         `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id)

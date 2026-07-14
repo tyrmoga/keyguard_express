@@ -122,6 +122,13 @@ export function createAdminRouter(kg: KeyGuard): Router {
     const newKey = kg.db.getApiKey(parsed.data.target_key_id)
     if (!newKey) return void res.status(404).json({ detail: "Target key not found." })
 
+    if (oldKey.id === newKey.id) {
+      return void res.status(400).json({ detail: "Cannot rotate a key to itself." })
+    }
+    if (newKey.rotates_to_id === oldKey.id) {
+      return void res.status(400).json({ detail: "Rotation cycle detected: target key already rotates back to this key." })
+    }
+
     kg.db.setRotation(oldKey.id, newKey.id)
     res.json({ detail: `Key '${oldKey.label}' now rotates to '${newKey.label}'.` })
   })
