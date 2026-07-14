@@ -21,29 +21,39 @@ Use it as a standalone reference when developing this project.
 Incoming Request
        │
        ▼
-┌──────────────────────────────────┐
-│     keyGuardMiddleware()         │  ← Hot Path
-│                                  │
-│  1. IP Blacklist check           │  ← In-Memory or Redis
-│  2. Extract X-API-KEY header     │
-│  3. Hash & validate key          │  ← better-sqlite3
-│  4. Sliding window rate limit    │  ← In-Memory or Redis
-│  5. Attach key to req.apiKey     │
-│  6. Log usage                    │  ← better-sqlite3
-└──────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│     keyGuardMiddleware()                 │  ← Hot Path
+│                                          │
+│  1. IP Blacklist check                   │  ← In-Memory or Redis
+│  2. Extract X-API-KEY header             │
+│  3. Hash key (SHA-256 + pepper)          │
+│  4. Look up by hash (better-sqlite3)     │
+│  5. Salted hash verify (PBKDF2-SHA512)   │  ← new keys only, backward compat
+│  6. Expiry check (fail closed)           │
+│  7. Monthly limit check                  │
+│  8. Sliding window rate limit            │  ← In-Memory or Redis
+│  9. Attach key to req.apiKey             │
+│ 10. Log usage (deferred via setImmediate)│  ← better-sqlite3
+└──────────────────────────────────────────┘
        │
        ▼
   Your Route Handler
 
 
-┌──────────────────────────────────┐
-│           KeyGuard Core          │  ← Cold Path
-│                                  │
-│  • AuthService (key generation)  │
-│  • RateLimitService (auto-pick)  │
-│  • KeyGuardDb (SQLite)           │
-│  • CLI + Admin API               │
-└──────────────────────────────────┘
+┌──────────────────────────────────────┐
+│           KeyGuard Core              │  ← Cold Path
+│                                      │
+│  • AuthService (key generation)      │
+│  •   — SHA-256 for lookup            │
+│  •   — PBKDF2-SHA512 with per-key    │
+│  •   —   salt for offline resistance │
+│  • RateLimitService (auto-pick)      │
+│  • KeyGuardDb (SQLite)               │
+│  • CLI + Admin API                   │
+│  • requireScope() middleware         │
+│  • clientIp() helper (X-Forwarded-For│
+│  •   aware)                          │
+└──────────────────────────────────────┘
 ```
 
 ### Backend auto-selection
@@ -62,7 +72,7 @@ Incoming Request
 | `keyguard/config.py` | `src/config.ts` | BaseSettings → manual dotenv read. Same auto-gen + .env persistence. |
 | `keyguard/core.py` | `src/core.ts` | KeyGuard class. DB init, blockRequest, rate limiter selection. |
 | `keyguard/middleware.py` | `src/middleware.ts` | FastAPI middleware → Express middleware function. `rateLimitByIp` factory. |
-| `keyguard/services/auth_service.py` | `src/services/auth.service.ts` | Same SHA-256 + pepper, token_urlsafe → randomBytes. No passlib equivalent. |
+| `keyguard/services/auth_service.py` | `src/services/auth.service.ts` | SHA-256 + pepper (for lookup) + per-key PBKDF2-SHA512 salt. crypto.randomBytes instead of secrets.token_urlsafe. |
 | `keyguard/services/memory_rate_limit.py` | `src/services/memory-rate-limit.service.ts` | Same sliding window log with arrays + mutex. |
 | `keyguard/services/rate_limit_service.py` | `src/services/rate-limit.service.ts` | ioredis pipeline, same ZSET logic. |
 | `keyguard/db/models.py` | `src/db/models.ts` | SQLAlchemy → better-sqlite3. Same schema. KeyGuardDb class with all CRUD. |
@@ -72,20 +82,23 @@ Incoming Request
 | `example_integration.py` | `examples/basic.ts` | Same demo: init, seed, serve. |
 | `keyguard/__init__.py` | `src/index.ts` | Package exports. |
 | (new) | `src/types.ts` | Consolidated TypeScript interfaces. |
-| (new) | `src/utils.ts` | secondsUntilTime helper. |
+| (new) | `src/utils.ts` | secondsUntilTime, clientIp helpers. |
+| (new) | `src/guards/scopes.ts` | requireScope middleware factory. |
+| (new) | `src/__tests__/run.ts` | Test suite (npm test). |
 
 ---
 
 ## 4. Design Decisions
 
-### 4.1 Auto-generated Secret Key
+### 4.1 Auto-generated Secrets
 
-Same approach as Python config.py:
-- `secretKey` is optional in the constructor
-- If not provided (or if it matches `_INSECURE_KEYS`), generate `crypto.randomBytes(32).toString("base64url")`
-- Persist to `.env` via `writeEnvVar()` helper (create or update SECRET_KEY line)
-- On next start, `process.env.SECRET_KEY` picks it up (dotenv loads `.env` at CLI entry)
+Same approach as Python config.py, extended:
+- `secretKey` and `adminKey` are optional in the constructor
+- If not provided (or if they match `_INSECURE_KEYS`), generate `crypto.randomBytes(32).toString("base64url")`
+- Persist to `.env` via `writeEnvVar()` helper (create or update `KG_SECRET_KEY` / `KG_ADMIN_KEY` line)
+- On next start, `process.env.KG_SECRET_KEY` / `process.env.KG_ADMIN_KEY` picks it up
 - Emits `console.warn` with the generated key
+- **Admin key is separate from hashing pepper** — independently rotatable
 
 ### 4.2 better-sqlite3 Instead of SQLAlchemy
 
@@ -97,29 +110,19 @@ Same approach as Python config.py:
 
 - Mutex via promise chaining (same pattern as `asyncio.Lock`)
 - State is lost on restart (same as Python in-memory backend)
-- `cleanup()` exists but is never called — same memory leak risk as the original
+- `cleanup()` runs every 2 minutes via `setInterval` in the constructor — memory leak fixed
 
 ### 4.4 Logging in the Hot Path
 
-Identical to the Python original — usage logs are written inline during the request-response cycle. For high-traffic deployments, this should be moved to a background queue.
+Unlike the Python original (which awaited `session.commit()` inline), the Express port defers writes via `setImmediate` — the response is sent before the DB write starts. This prevents the synchronous `better-sqlite3` call from blocking the event loop for every request.
+
+Usage logs are also written for rejected requests (expired keys, monthly caps, rate limits) — not just successful authentications.
 
 ---
 
 ## 5. Known Bugs Inherited from Python Original
 
-These issues from `issues.md` apply directly to this Express port:
-
-| # | Issue | Severity | Location | Status |
-|---|-------|----------|----------|--------|
-| 1.1 | Hardcoded default secret key | CRITICAL | `src/config.ts` | **FIXED** — auto-generated |
-| 1.2 | Weak key hashing (SHA-256, no salt, no KDF) | HIGH | `src/services/auth.service.ts` | Inherited |
-| 1.3 | Non-constant-time key comparison | MEDIUM | `src/services/auth.service.ts` `===` | Inherited |
-| 1.4 | Reverse proxy breaks IP controls | HIGH | `src/middleware.ts` `req.ip` | Inherited — use `trust proxy` |
-| 1.5 | Distinguishable error messages | LOW | `src/middleware.ts` | Inherited |
-| 2.1 | Redis vs Memory rate limit inconsistency | CRITICAL | `rate-limit.service.ts` ZADD before check | Inherited |
-| 3.1 | Synchronous DB logging on hot path | MEDIUM | `src/db/models.ts` `logUsage()` | Inherited |
-| 3.3 | Memory leak (cleanup never called) | MEDIUM | `memory-rate-limit.service.ts` | Inherited |
-| 5.2 | Broad exception handler | LOW | `src/utils.ts` `secondsUntilTime` | Inherited |
+All inherited bugs have been fixed. See [`issues.md`](issues.md) for the full list with severity and fix notes.
 
 ---
 
@@ -130,19 +133,26 @@ These issues from `issues.md` apply directly to this Express port:
 - **No ORM overhead**: Direct better-sqlite3 queries instead of SQLAlchemy
 - **CLI with Commander**: Better ergonomics than argparse
 - **Zod validation**: Runtime schema validation for admin API
+- **Per-key PBKDF2-SHA512**: Instead of raw SHA-256, new keys get 100k PBKDF2 iterations with a random salt
+- **Separate admin key**: `KG_ADMIN_KEY` is independent of the hashing pepper
+- **`clientIp()` helper**: Reads `X-Forwarded-For` for reverse proxy support
+- **`requireScope()` middleware**: Route-level scope enforcement
+- **Key rotation**: Overlapping active keys during rotation window
+- **Deferred logging**: `setImmediate` prevents DB writes from blocking the event loop
+- **Memory limit cleanup**: `setInterval` prunes stale rate-limit entries every 2 minutes
+- **Test suite**: `npm test` runs unit tests for critical paths
 
 ### Port-Specific Limitations
 - **PostgreSQL not implemented**: better-sqlite3 only. Add `pg` when needed.
-- **No async DB**: better-sqlite3 is synchronous. This is fine for single-process, but multi-worker setups need a different driver.
-- **No Alembic equivalent**: Schema changes are manual SQL migrations.
-- **`passlib` — no bcrypt**: Same SHA-256-only hashing as original.
+- **No async DB**: better-sqlite3 is synchronous. Usage logging is deferred via `setImmediate` but still synchronously hits SQLite. Multi-worker setups need a different driver.
+- **No Alembic equivalent**: Schema changes are manual SQL migrations via `PRAGMA table_info` checks in `init()`.
+- **Weak hashing for old keys**: Keys created before the salt migration still use SHA-256 only; they authenticate normally but lack offline-cracking resistance.
 
 ---
 
 ## 7. Setup & Run
 
 ```bash
-cd express
 npm install
 npx tsx examples/basic.ts
 ```
@@ -176,14 +186,21 @@ curl http://localhost:8000/api/data -H "X-API-KEY: kg_live_..."
 
 ---
 
-## 9. TODOs / Future Work
+## 9. Completed Work
 
-- [ ] Add `hmac.compareDigest` for constant-time key comparison (issue #1.3)
-- [ ] Fix Redis ZADD ordering bug (issue #2.1)
-- [ ] Add `X-Forwarded-For` support for reverse proxy deployments (issue #1.4)
-- [ ] Add periodic cleanup timer for memory rate limiter (issue #3.3)
-- [ ] Move usage logging to async/background (issue #3.1)
-- [ ] Add PostgreSQL driver option
-- [ ] Add proper test suite (Jest/Vitest)
-- [ ] Add CI/CD pipeline
-- [ ] Publish to npm
+- ✅ `crypto.timingSafeEqual` for constant-time key comparison (admin router)
+- ✅ Redis ZADD moved after limit check (backends now consistent)
+- ✅ `X-Forwarded-For` support via `clientIp()` helper
+- ✅ Periodic cleanup timer for memory rate limiter (`setInterval` every 2min)
+- ✅ Usage logging deferred via `setImmediate` (event loop no longer blocked)
+- ✅ Expiry, monthly caps, and scopes enforced in middleware
+- ✅ Per-key salt + PBKDF2-SHA512 hashing (100k iterations)
+- ✅ Separate admin key (independent from hashing pepper)
+- ✅ Key rotation support (`rotates_to_id` column + rotate endpoint)
+- ✅ Test suite (`npm test` — secondsUntilTime, clientIp, AuthService, MemoryRateLimitService)
+
+## 10. Future Work
+
+- Add PostgreSQL driver option
+- Add CI/CD pipeline
+- Publish to npm
