@@ -231,6 +231,54 @@ Reads `X-Forwarded-For` → `req.ip` → `req.socket.remoteAddress`. If `app.set
 
 See [`issues.md`](issues.md) for the full issue history and fix log.
 
+## Security
+
+### Threat model
+
+KeyGuard Express is designed for server-to-server API authentication. It assumes:
+
+- The server environment is trusted (secrets in `.env` are not exposed to unauthorized processes).
+- Network traffic is encrypted (TLS) — API keys in headers are visible in plaintext over HTTP.
+- The database file (SQLite) or Postgres instance is on a trusted, access-controlled filesystem or network.
+- Administrative access (the `/admin` endpoints and CLI) is restricted to authorized operators.
+
+It is **not** designed for:
+
+- Browser-based API key storage (keys are shown once and should be stored securely server-side).
+- Direct end-user authentication (use OAuth, sessions, or JWTs for user-facing auth).
+
+### How API keys work
+
+- Keys are generated as `kg_live_<43 random base64url chars>` (~256 bits of entropy).
+- They are never stored in plaintext. The database stores `SHA-256(key + pepper)` for lookup and `PBKDF2-SHA512(key, salt + pepper)` with 100k iterations for offline-cracking resistance.
+- The raw key is returned exactly once — at creation time via the admin API or CLI.
+- Keys authenticate via the `X-API-KEY` header. Comparison uses `crypto.timingSafeEqual` against the stretched hash.
+
+### Admin API
+
+- Protected by `X-Admin-Key` header verified with `crypto.timingSafeEqual` against the global admin key or stored admin tokens.
+- Scoped admin tokens (`org_admin` role) can manage only their assigned organization.
+- All admin actions are logged to `admin_audit_log` with IP and timestamp.
+- The global `KG_ADMIN_KEY` is auto-generated on first run and persisted to `.env`.
+
+### Rate limiting and abuse prevention
+
+- Per-key rate limiting uses a sliding window (mutex-clocked in memory, atomic ZSET operations in Redis).
+- IP-based rate limiting (`rateLimitByIp`) is available for public endpoints like `/login`.
+- IP abuse tracking blocks an IP for 24 hours after exceeding the threshold (default: 100 failures/hour).
+- With Redis, blocks are synced across instances (hybrid backend: memory for counters, Redis for blocklist).
+
+### HMAC webhook verification
+
+- Verifies `X-Signature`, `X-Timestamp`, `X-Nonce` headers.
+- Rejects requests outside the clock-skew window (default: 300s).
+- Nonces are deduplicated within the skew window (in-memory per process).
+- Use with external webhook providers or for internal service-to-service signing.
+
+### Reporting vulnerabilities
+
+To report a security vulnerability, open an issue on the GitHub repository or contact the maintainers directly. Do not disclose vulnerabilities publicly until they are addressed.
+
 ## License
 
 MIT
