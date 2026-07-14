@@ -1,6 +1,6 @@
 import "dotenv/config"
 import express, { Request, Response } from "express"
-import { KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp } from "../src"
+import { KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp, requireScope } from "../src"
 import { createAdminRouter } from "../src/api/admin.router"
 
 // 1. Configure (just a secret key — auto-generated if not set)
@@ -44,7 +44,7 @@ app.post("/heavy-task", rateLimitByIp(kg, 1, 60, 3600, "path"), (_req: Request, 
   res.json({ message: "Heavy task completed successfully!" })
 })
 
-app.get("/api/data", (req: Request, res: Response) => {
+app.get("/api/data", requireScope("read"), (req: Request, res: Response) => {
   const key = (req as any).apiKey
   res.json({
     message: "You accessed protected data!",
@@ -53,7 +53,7 @@ app.get("/api/data", (req: Request, res: Response) => {
   })
 })
 
-app.get("/api/profile", (req: Request, res: Response) => {
+app.get("/api/profile", requireScope("read"), (req: Request, res: Response) => {
   const key = (req as any).apiKey
   res.json({
     key_id: key.id,

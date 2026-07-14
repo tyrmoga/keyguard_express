@@ -36,6 +36,9 @@ export interface CreateApiKeyInput {
   key_hash: string
   rate_limit_per_minute: number
   scopes: string[]
+  monthly_limit?: number | null
+  expires_at?: string | null
+  rotates_to_id?: string | null
 }
 
 export interface UsageLogRow {

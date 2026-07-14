@@ -1,7 +1,7 @@
 import * as crypto from "crypto"
 import { Router, Request, Response } from "express"
 import { KeyGuard } from "../core"
-import { OrgCreateSchema, KeyCreateSchema } from "../schemas/admin"
+import { OrgCreateSchema, KeyCreateSchema, RotationSchema } from "../schemas/admin"
 
 function constantTimeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a)
@@ -72,6 +72,9 @@ export function createAdminRouter(kg: KeyGuard): Router {
       key_hash: keyHash,
       rate_limit_per_minute: parsed.data.rate_limit_per_minute,
       scopes: parsed.data.scopes,
+      monthly_limit: parsed.data.monthly_limit,
+      expires_at: parsed.data.expires_at,
+      rotates_to_id: parsed.data.rotates_to_id,
     })
 
     res.status(201).json({
@@ -80,6 +83,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
       prefix: apiKey.prefix,
       raw_key: rawKey,
       rate_limit_per_minute: apiKey.rate_limit_per_minute,
+      monthly_limit: apiKey.monthly_limit,
+      expires_at: apiKey.expires_at,
       scopes: JSON.parse(apiKey.scopes || "[]"),
       org_name: org.name,
       created_at: apiKey.created_at,
@@ -96,6 +101,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
         prefix: k.prefix,
         is_active: !!k.is_active,
         rate_limit_per_minute: k.rate_limit_per_minute,
+        monthly_limit: k.monthly_limit,
+        expires_at: k.expires_at,
         scopes: JSON.parse(k.scopes || "[]"),
         org_name: org?.name || "",
         created_at: k.created_at,
@@ -103,6 +110,20 @@ export function createAdminRouter(kg: KeyGuard): Router {
       }
     })
     res.json({ keys: items, total: items.length })
+  })
+
+  router.post("/keys/:keyId/rotate", verifyAdmin, (req: Request, res: Response) => {
+    const oldKey = kg.db.getApiKey(req.params.keyId)
+    if (!oldKey) return void res.status(404).json({ detail: "Key not found." })
+
+    const parsed = RotationSchema.safeParse(req.body)
+    if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
+
+    const newKey = kg.db.getApiKey(parsed.data.target_key_id)
+    if (!newKey) return void res.status(404).json({ detail: "Target key not found." })
+
+    kg.db.setRotation(oldKey.id, newKey.id)
+    res.json({ detail: `Key '${oldKey.label}' now rotates to '${newKey.label}'.` })
   })
 
   router.delete("/keys/:keyId", verifyAdmin, (req: Request, res: Response) => {

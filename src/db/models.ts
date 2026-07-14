@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
   monthly_limit          INTEGER,
   created_at             TEXT DEFAULT (datetime('now')),
   expires_at             TEXT,
-  last_used_at           TEXT
+  last_used_at           TEXT,
+  rotates_to_id          TEXT REFERENCES api_keys(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
@@ -85,14 +86,35 @@ export class KeyGuardDb {
   // ── API Keys ──
 
   createApiKey(row: CreateApiKeyInput): ApiKeyRow {
-    const id = uuid()
+    const id = row.rotates_to_id ? uuid() : uuid()
     this.db
       .prepare(
-        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, row.org_id, row.label, row.prefix, row.key_hash, row.rate_limit_per_minute, JSON.stringify(row.scopes))
+      .run(
+        id, row.org_id, row.label, row.prefix, row.key_hash,
+        row.rate_limit_per_minute, JSON.stringify(row.scopes),
+        row.monthly_limit ?? null, row.expires_at ?? null,
+        row.rotates_to_id ?? null,
+      )
     return this.getApiKey(id)!
+  }
+
+  setRotation(oldKeyId: string, newKeyId: string): void {
+    this.db
+      .prepare("UPDATE api_keys SET rotates_to_id = ? WHERE id = ?")
+      .run(newKeyId, oldKeyId)
+  }
+
+  getMonthlyUsage(keyId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) as c FROM usage_logs
+         WHERE key_id = ? AND timestamp >= date('now', 'start of month', '0 months')`
+      )
+      .get(keyId) as any
+    return row?.c ?? 0
   }
 
   getApiKey(id: string): ApiKeyRow | undefined {

@@ -1,6 +1,7 @@
 export { KeyGuardConfig } from "./config"
 export { KeyGuard } from "./core"
 export { keyGuardMiddleware, rateLimitByIp } from "./middleware"
+export { requireScope } from "./guards/scopes"
 export { AuthService } from "./services/auth.service"
 export { MemoryRateLimitService } from "./services/memory-rate-limit.service"
 export { RateLimitService } from "./services/rate-limit.service"

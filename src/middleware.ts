@@ -34,6 +34,19 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         return void res.status(401).json({ detail: "Invalid or inactive API Key." })
       }
 
+      // 3a. Expiry Check
+      if (keyObj.expires_at && new Date(keyObj.expires_at) <= new Date()) {
+        return void res.status(401).json({ detail: "API Key has expired." })
+      }
+
+      // 3b. Monthly Limit Check
+      if (keyObj.monthly_limit) {
+        const monthlyUsage = kg.db.getMonthlyUsage(keyObj.id)
+        if (monthlyUsage >= keyObj.monthly_limit) {
+          return void res.status(429).json({ detail: "Monthly request limit exceeded." })
+        }
+      }
+
       // 4. Rate Limiting
       const { limited, remaining } = await kg.rateLimiting.isRateLimited(keyHash, keyObj.rate_limit_per_minute)
 
