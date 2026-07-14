@@ -53,6 +53,19 @@ export class PostgresDb implements IDatabaseBackend {
       );
     `
     await this.pool.query(SCHEMA)
+    await this.migrate()
+  }
+
+  private async migrate(): Promise<void> {
+    const res = await this.pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'admin_tokens' AND column_name = 'is_active'`
+    )
+    if (res.rows.length === 0) {
+      await this.pool.query(
+        "ALTER TABLE admin_tokens ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+      )
+    }
   }
 
   async close(): Promise<void> {

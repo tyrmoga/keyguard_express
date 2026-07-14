@@ -12,6 +12,7 @@ export function ipInCidr(ip: string, cidr: string): boolean {
   if (!cidr.includes("/")) return ip === cidr
   const [range, bitsStr] = cidr.split("/")
   const bits = parseInt(bitsStr, 10)
+  if (isNaN(bits) || bits < 0 || bits > 32) return false
   const mask = bits === 0 ? 0 : ~(2 ** (32 - bits) - 1)
   const ipNum = ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0
   const rangeNum = range.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0

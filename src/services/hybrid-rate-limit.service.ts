@@ -19,25 +19,25 @@ export class HybridRateLimitService implements IRateLimitBackend {
   }
 
   async isBlocked(identifier: string): Promise<boolean> {
-    const redisBlocked = await this.redis.get(`block:${identifier}`)
-    if (redisBlocked !== null) return true
+    try {
+      const redisBlocked = await this.redis.get(`block:${identifier}`)
+      if (redisBlocked !== null) return true
+    } catch {}
     return this.memory.isBlocked(identifier)
   }
 
   async block(identifier: string, durationSeconds: number): Promise<void> {
-    await this.redis.set(`block:${identifier}`, "1", "EX", durationSeconds)
+    try { await this.redis.set(`block:${identifier}`, "1", "EX", durationSeconds) } catch {}
     await this.memory.block(identifier, durationSeconds)
   }
 
   async trackIpAbuse(ipAddress: string, threshold = 100): Promise<void> {
     await this.memory.trackIpAbuse(ipAddress, threshold)
-    const count = await this.redis.incr(`abuse:${ipAddress}`)
-    if (count === 1) {
-      await this.redis.expire(`abuse:${ipAddress}`, 3600)
-    }
-    if (count > threshold) {
-      await this.block(ipAddress, 86400)
-    }
+    try {
+      const count = await this.redis.incr(`abuse:${ipAddress}`)
+      if (count === 1) await this.redis.expire(`abuse:${ipAddress}`, 3600)
+      if (count > threshold) await this.block(ipAddress, 86400)
+    } catch {}
   }
 
   async disconnect(): Promise<void> {

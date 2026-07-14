@@ -12,6 +12,7 @@ export class KeyGuard {
   readonly auth: AuthService
   readonly db: IDatabaseBackend
   readonly rateLimiting: IRateLimitBackend
+  private _backend: { disconnect?(): Promise<void>; stopCleanup?(): void }
 
   constructor(config: KeyGuardConfig) {
     this.config = config
@@ -23,6 +24,7 @@ export class KeyGuard {
     } else {
       this.rateLimiting = new MemoryRateLimitService()
     }
+    this._backend = this.rateLimiting as any
   }
 
   async initDb(): Promise<void> {
@@ -38,8 +40,7 @@ export class KeyGuard {
 
   async shutdown(): Promise<void> {
     await this.db.close()
-    if ("disconnect" in this.rateLimiting) {
-      await (this.rateLimiting as any).disconnect?.()
-    }
+    this._backend.stopCleanup?.()
+    await this._backend.disconnect?.()
   }
 }
