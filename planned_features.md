@@ -2,20 +2,20 @@
 
 > **Status**: Planning document. Tiers are ordered by impact per effort. Items within a tier are unordered unless noted.
 
-Today KeyGuard Express authenticates API keys and rate-limits requests. The schema already carries `expires_at`, `monthly_limit`, and `scopes` columns — but nothing enforces them. A key with an expired date authenticates forever; monthly caps are decorative; scopes are returned in responses but never checked against routes. Closing these gaps is Tier 1: finishing what's half-built.
+Today KeyGuard Express authenticates API keys, rate-limits requests, enforces key expiry and monthly caps, and validates scopes per route.
 
 Beyond that, a true "drop-in security suite" means bundling standard Express hardening (headers, CORS, validation) so consumers get one `npm install` instead of stitching together helmet + cors + express-validator + a key-auth library. The roadmap below groups work by what it unlocks.
 
 ---
 
-## Tier 1 — Finish the Half-Built Schema (highest ROI, lowest effort)
+## Tier 1 — Finish the Half-Built Schema ✅
 
-The DB and admin API already support these fields; the middleware just ignores them.
+The DB and admin API already supported these fields; the middleware now enforces them.
 
-- **Enforce `expires_at` in `keyGuardMiddleware`** — if `keyObj.expires_at` is set and in the past, respond 401. Trivial, currently a silent correctness gap.
-- **Enforce `monthly_limit`** — a `COUNT(*) FROM usage_logs WHERE key_id = ? AND timestamp >= date('now', 'start of month')` checked alongside the per-minute rate limit. Reject with 429 (or a distinct status) when exceeded.
-- **Enforce `scopes`** — a `requireScope("write")` middleware factory that reads `(req as any).apiKey.scopes` and returns 403 on mismatch. Routes declare their required scopes; the admin API already sets them.
-- **Key rotation** — a `rotates_to_id` column so an org can have two overlapping active keys during a rotation window. Consumers cut over without a hard cutoff point.
+- **Enforce `expires_at` in `keyGuardMiddleware`** — if `keyObj.expires_at` is set and in the past, respond 401. ✅
+- **Enforce `monthly_limit`** — `COUNT(*)` against `usage_logs` checked alongside the per-minute rate limit. ✅
+- **Enforce `scopes`** — `requireScope("write")` middleware factory; returns 403 on mismatch. ✅
+- **Key rotation** — `rotates_to_id` column + `POST /keys/:keyId/rotate` admin endpoint for overlapping active keys. ✅
 
 ---
 

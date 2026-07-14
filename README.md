@@ -7,10 +7,14 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 ## Features
 
 - **API Key Auth** — validate `X-API-KEY` header against hashed keys in SQLite
+- **Key Expiry** — reject expired keys with 401
+- **Monthly Caps** — enforce per-key monthly usage limits (429 when exceeded)
+- **Scope Guard** — `requireScope("write")` middleware gates routes by key scopes
+- **Key Rotation** — overlapping active keys during rotation window via admin API
 - **Rate Limiting** — sliding window via in-memory (default) or Redis backend
 - **IP Abuse Detection** — track missing/invalid key attempts, auto-block at threshold
 - **IP Blocking** — temporary or time-based blocks (global or per-path)
-- **Admin API** — manage organizations, keys, and stats (protected by `X-Admin-Key`)
+- **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
 - **CLI** — `keyguard init`, `create-org`, `create-key`, `list-keys`, `revoke-key`, `stats`
 
 ## Quick Start
@@ -54,22 +58,18 @@ For IP-based controls behind a reverse proxy (nginx, Cloudflare, LB), call `app.
 
 ## Status of Known Issues
 
-This port inherited bugs from the original Python codebase. Most have been fixed; remaining
-limitations are documented here.
+Most inherited bugs from the original Python codebase have been fixed. Remaining limitations:
 
 | Severity | Issue | Status |
 |----------|-------|--------|
-| CRITICAL | Redis ZADD unconditional (retrying client self-extends lockout) | **Fixed** — ZADD moved after limit check |
 | HIGH | Weak SHA-256 hashing (no per-key salt, no KDF) | Open — needs bcrypt/PBKDF2 |
-| MEDIUM | Non-constant-time key comparison (`===`) | **Fixed** — `crypto.timingSafeEqual` in both auth and admin |
-| MEDIUM | Synchronous DB on hot path blocks event loop | **Fixed** — `setImmediate` defers `logUsage`/`updateLastUsed` |
-| MEDIUM | Admin key doubles as hashing pepper | **Fixed** — separate `ADMIN_KEY` config with own env var |
+| HIGH | Zero test coverage | Open |
 | MEDIUM | Memory leak — `cleanup()` never called | Open |
-| MEDIUM | Zero test coverage | Open |
-| LOW | `secondsUntilTime` drops minutes in AM/PM formats | **Fixed** |
-| LOW | `secondsUntilTime` treats midnight as "no match" | **Fixed** |
-| LOW | Stats `recent_requests_1h` returns 0 due to local/UTC format mismatch | **Fixed** |
+| LOW | Usage logs only capture authorized requests | Open |
 | LOW | Key prefix collisions (24-bit entropy) | Open |
+| LOW | Reverse proxy IP controls require consumer `app.set('trust proxy', ...)` | Open |
+
+For the full issue history and all fixed items, see [`issues.md`](issues.md).
 
 ## License
 

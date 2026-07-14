@@ -25,6 +25,10 @@ This document tracks all known issues, their fix status in the Express port, and
 | 16 | Redis ZSET member collision (same-ms requests) | MEDIUM | **FIXED** | Appended `crypto.randomUUID()` to member |
 | 17 | Usage logs only capture authorized requests | LOW | Open | 401/403/429 responses not logged |
 | 18 | Key prefix collisions (24-bit entropy) | LOW | Open | `prefix = rawKey.slice(0, 12)` — 4 random chars |
+| 19 | `expires_at` not enforced by middleware | MEDIUM | **FIXED** | Middleware rejects expired keys with 401 |
+| 20 | `monthly_limit` not enforced by middleware | MEDIUM | **FIXED** | Middleware counts usage_logs for current month, rejects with 429 |
+| 21 | `scopes` stored but never validated on routes | MEDIUM | **FIXED** | `requireScope()` middleware factory gates routes |
+| 22 | No key rotation support | LOW | **FIXED** | `rotates_to_id` column + admin rotate endpoint |
 
 ### Open items
 
