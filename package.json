@@ -3,6 +3,14 @@
   "version": "0.3.0",
   "description": "API key authentication, rate limiting, and abuse prevention as a drop-in Express.js library.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tyrmoga/keyguard_express.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tyrmoga/keyguard_express/issues"
+  },
+  "homepage": "https://github.com/tyrmoga/keyguard_express#readme",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
