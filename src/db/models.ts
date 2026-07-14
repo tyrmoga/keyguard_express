@@ -81,6 +81,9 @@ export class KeyGuardDb implements IDatabaseBackend {
       throw new Error(`Only sqlite:// is supported in this version. Got: ${databaseUrl}`)
     }
     const dbPath = databaseUrl.replace("sqlite://", "") || "keyguard.db"
+    if (!/^[\w.\-\\\/]+$/.test(dbPath)) {
+      throw new Error("Invalid database path: " + dbPath + ". Use a filesystem path without special characters.")
+    }
     this.db = new Database(dbPath)
     this.db.pragma("journal_mode = WAL")
     this.db.pragma("foreign_keys = ON")

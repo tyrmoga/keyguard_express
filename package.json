@@ -84,5 +84,9 @@
       "type": "github",
       "url": "https://github.com/sponsors/tyrmoga"
     }
+  ],
+  "overrides": {
+    "tar-stream": "3.2.0"
+  }
   ]
 }
