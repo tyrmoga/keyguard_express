@@ -26,4 +26,6 @@ export type {
   KeyResponse,
   StatsResponse,
   RouteLimitRow,
+  AdminTokenRow,
+  AdminAuditLogRow,
 } from "./types"

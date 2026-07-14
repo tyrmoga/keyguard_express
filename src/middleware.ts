@@ -21,6 +21,9 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       const apiKeyRaw = req.headers["x-api-key"] as string | undefined
       if (!apiKeyRaw) {
         await kg.rateLimiting.trackIpAbuse(ipAddress, kg.config.ipBlockThreshold)
+        if (kg.config.onAbuseThreshold) {
+          setImmediate(() => kg.config.onAbuseThreshold!(ipAddress, ipAddress))
+        }
         return void res.status(401).json({ detail: "Missing API Key. Include X-API-KEY header." })
       }
 
@@ -31,6 +34,9 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
 
       if (!keyObj || !keyObj.is_active || !org || org.status !== "active") {
         await kg.rateLimiting.trackIpAbuse(ipAddress, kg.config.ipBlockThreshold)
+        if (kg.config.onAbuseThreshold) {
+          setImmediate(() => kg.config.onAbuseThreshold!(ipAddress, ipAddress))
+        }
         return void res.status(401).json({ detail: "Invalid or inactive API Key." })
       }
 
@@ -54,6 +60,13 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
           setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 401, 0, ipAddress))
           return void res.status(401).json({ detail: "API Key has expired." })
+        }
+        // Alerting: key expiring within 7 days
+        if (kg.config.onKeyExpiringSoon) {
+          const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / 86400000)
+          if (daysLeft <= 7) {
+            setImmediate(() => kg.config.onKeyExpiringSoon!(keyObj, daysLeft))
+          }
         }
       }
 

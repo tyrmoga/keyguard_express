@@ -1,7 +1,7 @@
 import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
-import { KeyGuardConfigOptions } from "./types"
+import { KeyGuardConfigOptions, ApiKeyRow } from "./types"
 
 const INSECURE_KEYS = new Set(["super-secret-admin-key-change-me", "change-me", ""])
 const ENV_PATH = path.resolve(process.cwd(), ".env")
@@ -59,12 +59,16 @@ export class KeyGuardConfig {
   readonly ipBlockThreshold: number
   readonly isSqlite: boolean
   readonly isRedisEnabled: boolean
+  readonly onAbuseThreshold?: (identifier: string, ipAddress: string) => void
+  readonly onKeyExpiringSoon?: (key: ApiKeyRow, daysLeft: number) => void
 
   constructor(opts: KeyGuardConfigOptions = {}) {
     this.databaseUrl = opts.databaseUrl ?? "sqlite://keyguard.db"
     this.redisUrl = opts.redisUrl ?? null
     this.defaultRateLimitPerMinute = opts.defaultRateLimitPerMinute ?? 60
     this.ipBlockThreshold = opts.ipBlockThreshold ?? 100
+    this.onAbuseThreshold = opts.onAbuseThreshold
+    this.onKeyExpiringSoon = opts.onKeyExpiringSoon
 
     this.secretKey = resolveKey(opts.secretKey, "KG_SECRET_KEY", "secretKey")
     this.adminKey = resolveKey(opts.adminKey, "KG_ADMIN_KEY", "adminKey")

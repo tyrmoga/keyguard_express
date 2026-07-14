@@ -5,6 +5,8 @@ export interface KeyGuardConfigOptions {
   adminKey?: string | null
   defaultRateLimitPerMinute?: number
   ipBlockThreshold?: number
+  onAbuseThreshold?: (identifier: string, ipAddress: string) => void
+  onKeyExpiringSoon?: (key: ApiKeyRow, daysLeft: number) => void
 }
 
 export interface OrganizationRow {
@@ -108,4 +110,24 @@ export interface StatsResponse {
   recent_requests_1h: number
   top_keys: { label: string; prefix: string; requests: number }[]
   error_rate: number
+}
+
+export interface AdminTokenRow {
+  id: string
+  label: string
+  token_hash: string
+  role: "owner" | "org_admin"
+  org_id?: string | null
+  created_at: string | null
+  last_used_at: string | null
+}
+
+export interface AdminAuditLogRow {
+  id: string
+  admin_token_id?: string | null
+  action: string
+  target_type: string
+  target_id: string
+  ip_address: string
+  timestamp: string | null
 }

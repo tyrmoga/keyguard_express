@@ -46,4 +46,7 @@ _All known issues from the original Python audit are now resolved._
 | 28 | Per-route limits from DB | `src/db/models.ts` + middleware | ✅ |
 | 29 | IP allowlisting per key | `src/db/models.ts` allowed_ips + middleware | ✅ |
 | 30 | Distributed blocklist sync (hybrid backend) | `src/services/hybrid-rate-limit.service.ts` | ✅ |
+| 31 | Scoped admin roles | `src/api/admin.router.ts` (verifyAdmin, requireOwner, requireOrgAccess) | ✅ |
+| 32 | Admin action audit log | `src/db/models.ts` + `GET /admin/audit-log` | ✅ |
+| 33 | Alerting hooks | `KeyGuardConfigOptions.onAbuseThreshold` / `onKeyExpiringSoon` | ✅ |
 

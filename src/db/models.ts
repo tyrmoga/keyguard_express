@@ -1,6 +1,6 @@
 import Database from "better-sqlite3"
 import { v4 as uuid } from "uuid"
-import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow } from "../types"
+import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -47,6 +47,26 @@ CREATE TABLE IF NOT EXISTS route_limits (
   max_requests   INTEGER NOT NULL DEFAULT 60,
   window_seconds INTEGER NOT NULL DEFAULT 60,
   UNIQUE(org_id, path, method)
+);
+
+CREATE TABLE IF NOT EXISTS admin_tokens (
+  id           TEXT PRIMARY KEY,
+  label        TEXT NOT NULL,
+  token_hash   TEXT NOT NULL UNIQUE,
+  role         TEXT NOT NULL DEFAULT 'org_admin' CHECK(role IN ('owner', 'org_admin')),
+  org_id       TEXT REFERENCES organizations(id),
+  created_at   TEXT DEFAULT (datetime('now')),
+  last_used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id             TEXT PRIMARY KEY,
+  admin_token_id TEXT REFERENCES admin_tokens(id),
+  action         TEXT NOT NULL,
+  target_type    TEXT NOT NULL,
+  target_id      TEXT NOT NULL,
+  ip_address     TEXT NOT NULL,
+  timestamp      TEXT DEFAULT (datetime('now'))
 );
 `
 
@@ -267,6 +287,48 @@ export class KeyGuardDb {
 
   deleteRouteLimit(id: string): void {
     this.db.prepare("DELETE FROM route_limits WHERE id = ?").run(id)
+  }
+
+  // ── Admin Tokens ──
+
+  createAdminToken(label: string, tokenHash: string, role: string, orgId?: string): AdminTokenRow {
+    const id = uuid()
+    this.db
+      .prepare("INSERT INTO admin_tokens (id, label, token_hash, role, org_id) VALUES (?, ?, ?, ?, ?)")
+      .run(id, label, tokenHash, role, orgId ?? null)
+    return this.db.prepare("SELECT * FROM admin_tokens WHERE id = ?").get(id) as any
+  }
+
+  findAdminTokenByHash(tokenHash: string): AdminTokenRow | undefined {
+    return this.db.prepare("SELECT * FROM admin_tokens WHERE token_hash = ?").get(tokenHash) as any
+  }
+
+  listAdminTokens(): AdminTokenRow[] {
+    return this.db.prepare("SELECT * FROM admin_tokens ORDER BY created_at").all() as any
+  }
+
+  revokeAdminToken(id: string): void {
+    this.db.prepare("DELETE FROM admin_tokens WHERE id = ?").run(id)
+  }
+
+  updateAdminTokenLastUsed(id: string): void {
+    this.db
+      .prepare("UPDATE admin_tokens SET last_used_at = datetime('now') WHERE id = ?")
+      .run(id)
+  }
+
+  // ── Admin Audit Log ──
+
+  logAdminAction(adminTokenId: string | null, action: string, targetType: string, targetId: string, ipAddress: string): void {
+    this.db
+      .prepare("INSERT INTO admin_audit_log (id, admin_token_id, action, target_type, target_id, ip_address) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(uuid(), adminTokenId, action, targetType, targetId, ipAddress)
+  }
+
+  getAdminAuditLog(limit = 50): AdminAuditLogRow[] {
+    return this.db
+      .prepare("SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT ?")
+      .all(limit) as any
   }
 
   close(): void {

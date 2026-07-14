@@ -40,13 +40,11 @@ These are thin wrappers around well-audited libraries, shipped as re-exports or 
 
 ---
 
-## Tier 4 — Multi-Tenant Admin Maturity
+## Tier 4 — Multi-Tenant Admin Maturity ✅
 
-Relevant for SaaS work: the current single shared `X-Admin-Key` authenticates all admin operations against every org.
-
-- **Scoped admin roles** — org-scoped admin tokens or a `role: owner | org_admin` model so one tenant's key management is isolated from another's.
-- **Admin action audit log** — an `admin_audit_log` table recording who created/revoked which key, from what IP, at what time. Currently zero audit trail on the admin side.
-- **Alerting hooks** — pluggable callbacks: `onAbuseThreshold(keyId, ip)`, `onKeyExpiringSoon(key, daysLeft)`, so consumers can wire Slack/email/PagerDuty without polling `/admin/stats`.
+- **Scoped admin roles** — `admin_tokens` table with `owner` / `org_admin` roles; `requireOwner` / `requireOrgAccess` guards; `org_admin` scoped to single org. ✅
+- **Admin action audit log** — `admin_audit_log` table logging all admin actions with IP; `GET /admin/audit-log` endpoint (owner only). ✅
+- **Alerting hooks** — `onAbuseThreshold(identifier, ip)` and `onKeyExpiringSoon(key, daysLeft)` callbacks on config. ✅
 
 ---
 
@@ -65,7 +63,7 @@ Relevant for SaaS work: the current single shared `X-Admin-Key` authenticates al
 - **Tier 1 files**: `src/middleware.ts` (expires_at, monthly_limit) + new `src/guards/scopes.ts` (requireScope factory).
 - **Tier 2 files**: `src/guards/headers.ts`, `cors.ts`, `validate.ts`, `hmac.ts` — all exported from `src/index.ts`. ✅
 - **Tier 3 files**: `src/services/token-bucket.service.ts`, `src/services/hybrid-rate-limit.service.ts`, `route_limits` table + `allowed_ips` column in `src/db/models.ts`, middleware IP/route checks, admin route-limit endpoints. ✅
-- **Tier 4 files**: Extends `src/schemas/admin.ts` with role schemas; adds `admin_audit_log` table; adds callback registration to `src/core.ts`.
+- **Tier 4 files**: `src/api/admin.router.ts` (scoped auth + audit + admin token endpoints), `src/db/models.ts` (admin_tokens + admin_audit_log tables), `src/types.ts` (AdminTokenRow, AdminAuditLogRow, callbacks), `src/config.ts` (callback storage), `src/middleware.ts` (hook invocations). ✅
 - **Tier 5 files**: New `src/db/pg.ts` adapter; new `src/health.ts`; `src/index.ts` gets `shutdown()` export; test suite under `src/__tests__/`.
 
 No new dependencies for Tier 1. Tier 2 would add `helmet` and `cors` (both standard, lightweight). Tier 3+ can use existing dependencies.

@@ -19,6 +19,9 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 - **Per-Route Limits** — configure `/heavy-task` at 5/min and `/data` at 1000/min from DB
 - **IP Allowlisting** — restrict keys to specific IPs or CIDR ranges
 - **Distributed Blocklist** — hybrid backend: memory counters + Redis blocklist sync
+- **Scoped Admin Roles** — `owner` (full access) and `org_admin` (single org) tokens
+- **Admin Audit Log** — every admin action recorded with IP and timestamp
+- **Alerting Hooks** — `onAbuseThreshold` and `onKeyExpiringSoon` callbacks
 - **Reverse Proxy Aware** — `X-Forwarded-For` respected when present
 - **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
 - **Security Headers** — `app.use(headers())` — helmet preset tuned for APIs
@@ -232,7 +235,47 @@ Requests from IPs outside the allowlist get a 403. When `allowed_ips` is not set
 
 When `REDIS_URL` is configured, KeyGuard uses a **hybrid backend**: rate counting stays in-memory (fast, no Redis overhead per request), but IP blocks are synced via Redis so all instances share the same blocklist. This is automatic — no code changes needed beyond setting the env var.
 
-### 13. Block an abusive client
+### 13. Scoped admin tokens (owner vs org_admin)
+
+```bash
+# Create an org_admin token scoped to a specific org (owner only)
+curl -X POST http://localhost:3000/admin/admin-tokens \
+  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"label":"acme-admin","role":"org_admin","org_name":"Acme Corp"}'
+
+# Returns a raw token (one-time display). Use it like the global admin key:
+# X-Admin-Key: <raw_token>
+
+# The global KG_ADMIN_KEY always acts as owner (full access).
+# org_admin tokens can only manage keys and route limits within their org.
+```
+
+### 14. View admin audit log (owner only)
+
+```bash
+curl http://localhost:3000/admin/audit-log \
+  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)"
+
+# Returns recent admin actions with IP, action type, target, and timestamp
+```
+
+### 15. Alerting hooks
+
+```ts
+const config = new KeyGuardConfig({
+  onAbuseThreshold: (identifier, ip) => {
+    console.warn(`Abuse threshold hit: ${identifier} from ${ip}`)
+    // Send to Slack, PagerDuty, etc.
+  },
+  onKeyExpiringSoon: (key, daysLeft) => {
+    console.warn(`Key ${key.label} expires in ${daysLeft} days`)
+    // Send reminder email
+  },
+})
+```
+
+### 16. Block an abusive client
 
 ```ts
 app.post("/login", async (req, res, next) => {

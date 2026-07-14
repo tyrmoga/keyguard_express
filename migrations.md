@@ -210,12 +210,14 @@ curl http://localhost:8000/api/data -H "X-API-KEY: kg_live_..."
 - ✅ Per-route limits from DB (`route_limits` table + middleware)
 - ✅ IP allowlisting per key (`allowed_ips` column + `checkIpAllowlist()`)
 - ✅ Distributed blocklist sync (`src/services/hybrid-rate-limit.service.ts`)
+- ✅ Scoped admin roles (`admin_tokens` table + `requireOwner`/`requireOrgAccess`)
+- ✅ Admin audit log (`admin_audit_log` table + `GET /admin/audit-log`)
+- ✅ Alerting hooks (`onAbuseThreshold`, `onKeyExpiringSoon` callbacks)
 
 ## 10. Future Work
 
 - Add PostgreSQL driver option
 - Add CI/CD pipeline
 - Publish to npm
-- Tier 4: Scoped admin roles, admin audit log, alerting hooks
 - Tier 5: Async write path, health endpoint, graceful shutdown
 - Tier 5: Async write path, health endpoint, graceful shutdown
