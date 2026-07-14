@@ -14,6 +14,8 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 - **Rate Limiting** — sliding window via in-memory (default) or Redis backend
 - **IP Abuse Detection** — track missing/invalid key attempts, auto-block at threshold
 - **IP Blocking** — temporary or time-based blocks (global or per-path)
+- **Salted Key Hashing** — per-key PBKDF2-SHA512 with 100k iterations (backward-compatible, old keys keep working)
+- **Reverse Proxy Aware** — `X-Forwarded-For` respected when present
 - **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
 - **CLI** — `keyguard init`, `create-org`, `create-key`, `list-keys`, `revoke-key`, `stats`
 
@@ -54,7 +56,7 @@ KeyGuard auto-detects backends:
 - **Rate limiting**: No `REDIS_URL` → in-memory sliding window with mutex; `REDIS_URL` set → ioredis sorted sets
 - **Database**: SQLite only in this port (better-sqlite3, synchronous)
 
-For IP-based controls behind a reverse proxy (nginx, Cloudflare, LB), call `app.set('trust proxy', 1)` before mounting middleware.
+IP-based controls read `X-Forwarded-For` when present, falling back to `req.ip` then `req.socket.remoteAddress`. Behind a reverse proxy, the proxy's IP is the direct peer; if your Express app has `app.set('trust proxy', 1)`, `req.ip` provides the real client IP before the fallback.
 
 See [`issues.md`](issues.md) for the full list of known issues, fix status, and remaining open items.
 

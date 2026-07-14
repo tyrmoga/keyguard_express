@@ -61,6 +61,12 @@ export class KeyGuardDb {
     if (!hasColumn("rotates_to_id")) {
       this.db.exec("ALTER TABLE api_keys ADD COLUMN rotates_to_id TEXT REFERENCES api_keys(id)")
     }
+    if (!hasColumn("key_salt")) {
+      this.db.exec("ALTER TABLE api_keys ADD COLUMN key_salt TEXT")
+    }
+    if (!hasColumn("key_hash_stretched")) {
+      this.db.exec("ALTER TABLE api_keys ADD COLUMN key_hash_stretched TEXT")
+    }
   }
 
   init(): void {
@@ -99,14 +105,15 @@ export class KeyGuardDb {
     const id = uuid()
     this.db
       .prepare(
-        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id, key_salt, key_hash_stretched)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id, row.org_id, row.label, row.prefix, row.key_hash,
         row.rate_limit_per_minute, JSON.stringify(row.scopes),
         row.monthly_limit ?? null, row.expires_at ?? null,
-        row.rotates_to_id ?? null,
+        row.rotates_to_id ?? null, row.key_salt ?? null,
+        row.key_hash_stretched ?? null,
       )
     return this.getApiKey(id)!
   }

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import { KeyGuard } from "./core"
-import { secondsUntilTime } from "./utils"
+import { clientIp, secondsUntilTime } from "./utils"
 
 export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -9,7 +9,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
     }
 
     const startTime = Date.now()
-    const ipAddress = req.ip || req.socket.remoteAddress || "unknown"
+    const ipAddress = clientIp(req)
 
     ;(async () => {
       // 1. IP Blacklist Check (Global)
@@ -34,7 +34,16 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         return void res.status(401).json({ detail: "Invalid or inactive API Key." })
       }
 
-      // 3a. Expiry Check (fail closed — unparseable dates treated as expired)
+      // 3a. Salted hash verification (backward-compatible: old keys have no salt, skip this step)
+      if (keyObj.key_salt) {
+        const stretched = kg.auth.stretchKey(apiKeyRaw, keyObj.key_salt)
+        if (stretched !== keyObj.key_hash_stretched) {
+          await kg.rateLimiting.trackIpAbuse(ipAddress, kg.config.ipBlockThreshold)
+          return void res.status(401).json({ detail: "Invalid or inactive API Key." })
+        }
+      }
+
+      // 3b. Expiry Check (fail closed — unparseable dates treated as expired)
       if (keyObj.expires_at) {
         const expiresAt = new Date(keyObj.expires_at)
         if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
@@ -98,7 +107,7 @@ export function rateLimitByIp(
   scope: "path" | "global" = "path"
 ) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown"
+    const ip = clientIp(req)
     const pathIdentifier = `ip_limit:${ip}:${req.path}`
 
     if (await kg.rateLimiting.isBlocked(ip)) {

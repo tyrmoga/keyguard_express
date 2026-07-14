@@ -5,7 +5,7 @@ import { MemoryRateLimitService } from "./services/memory-rate-limit.service"
 import { RateLimitService } from "./services/rate-limit.service"
 import { KeyGuardDb } from "./db/models"
 import { IRateLimitBackend } from "./types"
-import { secondsUntilTime } from "./utils"
+import { clientIp, secondsUntilTime } from "./utils"
 
 export class KeyGuard {
   readonly config: KeyGuardConfig
@@ -30,7 +30,7 @@ export class KeyGuard {
   }
 
   blockRequest(request: Request, duration: number | string, scope: "path" | "global" = "path"): Promise<void> {
-    const ip = request.ip || request.socket.remoteAddress || "unknown"
+    const ip = clientIp(request)
     const dSeconds = typeof duration === "number" ? duration : secondsUntilTime(duration)
     const identifier = scope === "global" ? ip : `ip_limit:${ip}:${request.path}`
     return this.rateLimiting.block(identifier, dSeconds)

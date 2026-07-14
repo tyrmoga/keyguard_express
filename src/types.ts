@@ -28,6 +28,8 @@ export interface ApiKeyRow {
   expires_at?: string | null
   last_used_at?: string | null
   rotates_to_id?: string | null
+  key_salt?: string | null
+  key_hash_stretched?: string | null
 }
 
 export interface CreateApiKeyInput {
@@ -40,6 +42,8 @@ export interface CreateApiKeyInput {
   monthly_limit?: number | null
   expires_at?: string | null
   rotates_to_id?: string | null
+  key_salt?: string | null
+  key_hash_stretched?: string | null
 }
 
 export interface UsageLogRow {

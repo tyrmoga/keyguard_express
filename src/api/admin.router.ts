@@ -64,7 +64,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
     const org = kg.db.findOrganizationByName(parsed.data.org_name)
     if (!org) return void res.status(404).json({ detail: `Organization '${parsed.data.org_name}' not found.` })
 
-    const [rawKey, keyHash] = kg.auth.generateApiKey(parsed.data.prefix)
+    const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey(parsed.data.prefix)
     const apiKey = kg.db.createApiKey({
       org_id: org.id,
       label: parsed.data.label,
@@ -75,6 +75,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
       monthly_limit: parsed.data.monthly_limit,
       expires_at: parsed.data.expires_at,
       rotates_to_id: parsed.data.rotates_to_id,
+      key_salt: keySalt,
+      key_hash_stretched: stretchedHash,
     })
 
     res.status(201).json({

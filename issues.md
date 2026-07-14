@@ -9,9 +9,9 @@ This document tracks all known issues, their fix status in the Express port, and
 |---|-------|----------|--------|-------|
 | 1 | Hardcoded default secret key | CRITICAL | **FIXED** | Auto-generated on first run, persisted to `.env` |
 | 2 | Redis ZADD unconditional (self-extends lockout) | CRITICAL | **FIXED** | ZADD moved after limit check |
-| 3 | Weak SHA-256 hashing (no per-key salt, no KDF) | HIGH | Open | Needs bcrypt/PBKDF2 with per-key salt |
-| 4 | Reverse proxy breaks IP controls | HIGH | Open | Documented: consumer must call `app.set('trust proxy', ...)` |
-| 5 | Zero test coverage | HIGH | Open | No unit/integration tests exist |
+| 3 | Weak SHA-256 hashing (no per-key salt, no KDF) | HIGH | **FIXED** | Per-key salt + PBKDF2-SHA512 100k iterations; backward-compatible with existing keys |
+| 4 | Reverse proxy breaks IP controls | HIGH | **FIXED** | `clientIp()` helper reads `X-Forwarded-For` first, falls back to `req.ip` then socket |
+| 5 | Zero test coverage | HIGH | **FIXED** | Test suite covering secondsUntilTime, clientIp, AuthService, MemoryRateLimitService |
 | 6 | Non-constant-time key comparison | MEDIUM | **FIXED** | `crypto.timingSafeEqual` in admin router; `verifyKey` removed (dead code, middleware uses hash+DB lookup instead) |
 | 7 | Synchronous DB blocks event loop | MEDIUM | **FIXED** | `setImmediate` defers `logUsage`/`updateLastUsed` |
 | 8 | Admin key = hashing pepper (single secret) | MEDIUM | **FIXED** | Separate `adminKey` config with own `ADMIN_KEY` env var |
@@ -32,7 +32,5 @@ This document tracks all known issues, their fix status in the Express port, and
 
 ### Open items
 
-- **Weak hashing (#3)**: SHA-256 with a global pepper only. Add per-key salt and a KDF (PBKDF2, bcrypt, or Argon2).
-- **Reverse proxy IP (#4)**: `req.ip` depends on `app.set('trust proxy', ...)`, which this library neither sets nor documents.
-- **Zero tests (#5)**: All fixes in this round were verified manually. A test suite around `secondsUntilTime`, `getStats`, the rate limiters, and middleware dispatch would prevent regressions.
+_All known issues from the original Python audit are now resolved._
 

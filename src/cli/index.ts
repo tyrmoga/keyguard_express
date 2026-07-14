@@ -72,7 +72,7 @@ program
       process.exit(1)
     }
 
-    const [rawKey, keyHash] = kg.auth.generateApiKey(args.prefix)
+    const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey(args.prefix)
     const rateLimit = args.rateLimit || kg.config.defaultRateLimitPerMinute
     const scopes = args.scopes.split(",").map((s: string) => s.trim())
 
@@ -83,6 +83,8 @@ program
       key_hash: keyHash,
       rate_limit_per_minute: rateLimit,
       scopes,
+      key_salt: keySalt,
+      key_hash_stretched: stretchedHash,
     })
 
     console.log(`${chalk.green("✓")} API key created:`)

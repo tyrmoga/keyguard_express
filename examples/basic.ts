@@ -80,14 +80,16 @@ function seedTestData(kg: KeyGuard): void {
 
   const org = kg.db.createOrganization("Demo Org")
 
-  const [rawKey] = kg.auth.generateApiKey()
+  const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey()
   kg.db.createApiKey({
     org_id: org.id,
     label: "demo-key",
-    prefix: rawKey.slice(0, 12),
-    key_hash: kg.auth.hashKey(rawKey),
+    prefix: rawKey.slice(0, 20),
+    key_hash: keyHash,
     rate_limit_per_minute: 30,
     scopes: ["read", "write"],
+    key_salt: keySalt,
+    key_hash_stretched: stretchedHash,
   })
 
   console.log(`\n  🔑 Demo API Key (use this in your requests)`)

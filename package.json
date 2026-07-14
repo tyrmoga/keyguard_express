@@ -11,7 +11,8 @@
     "build": "tsc",
     "dev": "tsx watch examples/basic.ts",
     "start": "tsx examples/basic.ts",
-    "cli": "tsx src/cli/index.ts"
+    "cli": "tsx src/cli/index.ts",
+    "test": "tsx src/__tests__/run.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
