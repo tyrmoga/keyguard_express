@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from "express"
 const USED_NONCES = new Map<string, number>()
 
 setInterval(() => {
-  const cutoff = Date.now() / 1000 - 300
+  const cutoff = Date.now() / 1000 - 600
   for (const [key, ts] of USED_NONCES) {
     if (ts < cutoff) USED_NONCES.delete(key)
   }

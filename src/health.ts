@@ -1,6 +1,5 @@
 import { Request, Response } from "express"
 import { KeyGuard } from "./core"
-import Redis from "ioredis"
 
 export function healthHandler(kg: KeyGuard) {
   return async (_req: Request, res: Response): Promise<void> => {
@@ -8,18 +7,19 @@ export function healthHandler(kg: KeyGuard) {
     let healthy = true
 
     try {
-      await (kg.db as any).db?.raw?.("SELECT 1") ?? Promise.resolve()
+      await kg.db.getOrganization("__health__")
       checks.database = "ok"
-    } catch {
-      checks.database = "ok"
+    } catch (e: any) {
+      checks.database = `error: ${e.message}`
+      healthy = false
     }
 
     if (kg.config.isRedisEnabled) {
       try {
-        const r = new Redis(kg.config.redisUrl!, { maxRetriesPerRequest: 1, lazyConnect: true })
-        await r.connect()
-        await r.ping()
-        await r.quit()
+        const redis = (kg.rateLimiting as any).redis
+        if (redis) {
+          await redis.ping()
+        }
         checks.redis = "ok"
       } catch (e: any) {
         checks.redis = `error: ${e.message}`

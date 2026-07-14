@@ -102,11 +102,11 @@ export class KeyGuardDb implements IDatabaseBackend {
     if (!hasColumn("allowed_ips")) {
       this.db.exec("ALTER TABLE api_keys ADD COLUMN allowed_ips TEXT")
     }
-    if (!hasColumn("is_active")) {
-      const adminCols = this.db.pragma("table_info(admin_tokens)") as any[]
-      if (!adminCols.some((c: any) => c.name === "is_active")) {
-        this.db.exec("ALTER TABLE admin_tokens ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
-      }
+
+    // admin_tokens migration (separate table)
+    const adminCols = this.db.pragma("table_info(admin_tokens)") as any[]
+    if (!adminCols.some((c: any) => c.name === "is_active")) {
+      this.db.exec("ALTER TABLE admin_tokens ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     }
   }
 
