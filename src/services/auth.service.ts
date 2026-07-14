@@ -15,11 +15,4 @@ export class AuthService {
     return crypto.createHash("sha256").update(payload).digest("hex")
   }
 
-  verifyKey(providedKey: string, storedHash: string): boolean {
-    const computed = this.hashKey(providedKey)
-    const a = Buffer.from(computed)
-    const b = Buffer.from(storedHash)
-    if (a.length !== b.length) return false
-    return crypto.timingSafeEqual(a, b)
-  }
 }

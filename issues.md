@@ -12,7 +12,7 @@ This document tracks all known issues, their fix status in the Express port, and
 | 3 | Weak SHA-256 hashing (no per-key salt, no KDF) | HIGH | Open | Needs bcrypt/PBKDF2 with per-key salt |
 | 4 | Reverse proxy breaks IP controls | HIGH | Open | Documented: consumer must call `app.set('trust proxy', ...)` |
 | 5 | Zero test coverage | HIGH | Open | No unit/integration tests exist |
-| 6 | Non-constant-time key comparison | MEDIUM | **FIXED** | `crypto.timingSafeEqual` in both auth and admin |
+| 6 | Non-constant-time key comparison | MEDIUM | **FIXED** | `crypto.timingSafeEqual` in admin router; `verifyKey` removed (dead code, middleware uses hash+DB lookup instead) |
 | 7 | Synchronous DB blocks event loop | MEDIUM | **FIXED** | `setImmediate` defers `logUsage`/`updateLastUsed` |
 | 8 | Admin key = hashing pepper (single secret) | MEDIUM | **FIXED** | Separate `adminKey` config with own `ADMIN_KEY` env var |
 | 9 | Memory leak (cleanup never called) | MEDIUM | Open | `MemoryRateLimitService.cleanup()` has zero call sites |
