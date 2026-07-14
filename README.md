@@ -42,15 +42,34 @@ app.use(keyGuardMiddleware(kg, "/api"))
 app.use("/admin", createAdminRouter(kg))
 ```
 
-## Known Issues
+## Configuration
 
-This port inherits several bugs from the original Python codebase. See [`issues.md`](issues.md) for details.
+Both `SECRET_KEY` (hashing pepper) and `ADMIN_KEY` (admin API auth) are auto-generated and persisted to `.env` if not provided. They are kept as separate, independently rotatable secrets so that compromising one does not compromise the other.
 
-| Severity | Key Issues |
-|----------|-----------|
-| CRITICAL | Redis ZADD before rate-limit check (backend inconsistency) |
-| HIGH | Weak SHA-256 hashing (no salt/KDF), no `X-Forwarded-For` support, zero tests |
-| MEDIUM | Non-constant-time key comparison, synchronous DB logging on hot path, memory leak |
+KeyGuard auto-detects backends:
+- **Rate limiting**: No `REDIS_URL` → in-memory sliding window with mutex; `REDIS_URL` set → ioredis sorted sets
+- **Database**: SQLite only in this port (better-sqlite3, synchronous)
+
+For IP-based controls behind a reverse proxy (nginx, Cloudflare, LB), call `app.set('trust proxy', 1)` before mounting middleware.
+
+## Status of Known Issues
+
+This port inherited bugs from the original Python codebase. Most have been fixed; remaining
+limitations are documented here.
+
+| Severity | Issue | Status |
+|----------|-------|--------|
+| CRITICAL | Redis ZADD unconditional (retrying client self-extends lockout) | **Fixed** — ZADD moved after limit check |
+| HIGH | Weak SHA-256 hashing (no per-key salt, no KDF) | Open — needs bcrypt/PBKDF2 |
+| MEDIUM | Non-constant-time key comparison (`===`) | **Fixed** — `crypto.timingSafeEqual` in both auth and admin |
+| MEDIUM | Synchronous DB on hot path blocks event loop | **Fixed** — `setImmediate` defers `logUsage`/`updateLastUsed` |
+| MEDIUM | Admin key doubles as hashing pepper | **Fixed** — separate `ADMIN_KEY` config with own env var |
+| MEDIUM | Memory leak — `cleanup()` never called | Open |
+| MEDIUM | Zero test coverage | Open |
+| LOW | `secondsUntilTime` drops minutes in AM/PM formats | **Fixed** |
+| LOW | `secondsUntilTime` treats midnight as "no match" | **Fixed** |
+| LOW | Stats `recent_requests_1h` returns 0 due to local/UTC format mismatch | **Fixed** |
+| LOW | Key prefix collisions (24-bit entropy) | Open |
 
 ## License
 
