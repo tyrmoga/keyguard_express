@@ -1,6 +1,6 @@
 import { Pool } from "pg"
 import { v4 as uuid } from "uuid"
-import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
+import { OrganizationRow, ApiKeyRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
 import { IDatabaseBackend } from "./types"
 
 export class PostgresDb implements IDatabaseBackend {

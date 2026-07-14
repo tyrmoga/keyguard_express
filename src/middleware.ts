@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import { KeyGuard } from "./core"
-import { clientIp, checkIpAllowlist, secondsUntilTime } from "./utils"
+import { clientIp, checkIpAllowlist } from "./utils"
 
 export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
   return (req: Request, res: Response, next: NextFunction): void => {

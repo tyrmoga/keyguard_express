@@ -1,6 +1,6 @@
 import Database from "better-sqlite3"
 import { v4 as uuid } from "uuid"
-import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
+import { OrganizationRow, ApiKeyRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
 import { IDatabaseBackend } from "./types"
 
 const SCHEMA = `

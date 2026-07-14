@@ -20,7 +20,7 @@ export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
       res.status(400).json({ detail: parsed.error.flatten() })
       return
     }
-    req.query = parsed.data
+    ;(req as any).query = parsed.data
     next()
   }
 }

@@ -262,6 +262,10 @@ export function createAdminRouter(kg: KeyGuard): Router {
     const parsed = AdminTokenCreateSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
 
+    if (parsed.data.role === "org_admin" && !parsed.data.org_name) {
+      return void res.status(400).json({ detail: "org_name is required for org_admin tokens." })
+    }
+
     let orgId: string | undefined
     if (parsed.data.org_name) {
       const org = await kg.db.findOrganizationByName(parsed.data.org_name)

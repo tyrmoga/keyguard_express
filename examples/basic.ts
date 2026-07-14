@@ -25,10 +25,19 @@ app.use(express.json({ limit: "10kb" }))
 app.use(headers())
 app.use(corsMiddleware(kg))
 
-// 2. Initialize database and seed data
+// 2. Initialize database and seed data, then start listening
 ;(async () => {
   await kg.initDb()
   await seedTestData(kg)
+
+  app.listen(PORT, () => {
+    console.log(`\nKeyGuard is running!`)
+    console.log(`   Public:    http://localhost:${PORT}/public`)
+    console.log(`   Protected: http://localhost:${PORT}/api/data`)
+    console.log(`   Login:     http://localhost:${PORT}/login`)
+    console.log(`   Admin:     http://localhost:${PORT}/admin/keys`)
+    console.log(`   Docs:      http://localhost:${PORT}/docs\n`)
+  })
 })()
 
 // 3. Health check (outside auth — for load balancers)
@@ -92,15 +101,6 @@ app.get("/api/profile", requireScope("read"), (req: Request, res: Response) => {
     rate_limit: key.rate_limit_per_minute,
     scopes: JSON.parse(key.scopes || "[]"),
   })
-})
-
-app.listen(PORT, () => {
-  console.log(`\nKeyGuard is running!`)
-  console.log(`   Public:    http://localhost:${PORT}/public`)
-  console.log(`   Protected: http://localhost:${PORT}/api/data`)
-  console.log(`   Login:     http://localhost:${PORT}/login`)
-  console.log(`   Admin:     http://localhost:${PORT}/admin/keys`)
-  console.log(`   Docs:      http://localhost:${PORT}/docs\n`)
 })
 
 // Graceful shutdown
