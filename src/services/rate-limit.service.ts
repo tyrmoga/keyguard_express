@@ -17,12 +17,10 @@ export class RateLimitService implements IRateLimitBackend {
     const redisKey = `ratelimit:${keyId}`
     const cutoff = now - windowSeconds
 
+    // Prune old entries and read current count before deciding
     const multi = this.redis.multi()
     multi.zremrangebyscore(redisKey, 0, cutoff)
     multi.zcard(redisKey)
-    const member = `${now}:${crypto.randomUUID()}`
-    multi.zadd(redisKey, now, member)
-    multi.expire(redisKey, windowSeconds + 1)
 
     const results = await multi.exec()
     if (!results) return { limited: true, remaining: 0 }
@@ -32,6 +30,11 @@ export class RateLimitService implements IRateLimitBackend {
     if (currentCount >= limit) {
       return { limited: true, remaining: 0 }
     }
+
+    // Only record this request when it's within the limit
+    const member = `${now}:${crypto.randomUUID()}`
+    await this.redis.zadd(redisKey, now, member)
+    await this.redis.expire(redisKey, windowSeconds + 1)
 
     const remaining = limit - currentCount - 1
     return { limited: false, remaining: Math.max(0, remaining) }

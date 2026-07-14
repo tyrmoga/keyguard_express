@@ -47,12 +47,14 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       ;(req as any).apiKey = keyObj
       ;(req as any).organization = org
 
-      // 6. Capture response for logging
+      // 6. Capture response for logging (deferred — don't block the event loop)
       const originalSend = res.send.bind(res)
       res.send = function (body: any): Response {
         const latency = Date.now() - startTime
-        kg.db.logUsage(keyObj.id, req.path, req.method, res.statusCode, latency, ipAddress)
-        kg.db.updateLastUsed(keyObj.id)
+        setImmediate(() => {
+          kg.db.logUsage(keyObj.id, req.path, req.method, res.statusCode, latency, ipAddress)
+          kg.db.updateLastUsed(keyObj.id)
+        })
 
         res.set("X-RateLimit-Limit", String(keyObj.rate_limit_per_minute))
         res.set("X-RateLimit-Remaining", String(remaining))

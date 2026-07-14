@@ -2,6 +2,7 @@ export interface KeyGuardConfigOptions {
   databaseUrl?: string
   redisUrl?: string | null
   secretKey?: string | null
+  adminKey?: string | null
   defaultRateLimitPerMinute?: number
   ipBlockThreshold?: number
 }

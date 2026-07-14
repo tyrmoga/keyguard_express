@@ -16,6 +16,10 @@ export class AuthService {
   }
 
   verifyKey(providedKey: string, storedHash: string): boolean {
-    return this.hashKey(providedKey) === storedHash
+    const computed = this.hashKey(providedKey)
+    const a = Buffer.from(computed)
+    const b = Buffer.from(storedHash)
+    if (a.length !== b.length) return false
+    return crypto.timingSafeEqual(a, b)
   }
 }

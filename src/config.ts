@@ -27,10 +27,34 @@ function writeEnvVar(key: string, value: string): void {
   }
 }
 
+function resolveKey(
+  optsValue: string | null | undefined,
+  envName: string,
+  label: string,
+): string {
+  const provided = optsValue ?? process.env[envName] ?? null
+  if (provided && !INSECURE_KEYS.has(provided)) {
+    return provided
+  }
+  const generated = crypto.randomBytes(32).toString("base64url")
+  writeEnvVar(envName, generated)
+  console.warn(
+    `\n${"=".repeat(70)}` +
+    `\n  ${envName} not set — auto-generated and saved to .env:\n` +
+    `\n    ${generated}\n` +
+    `\n  It will be loaded automatically on next start.` +
+    `\n  To use your own:` +
+    `\n    new KeyGuardConfig({ ${label}: 'your-key' })` +
+    `\n${"=".repeat(70)}`
+  )
+  return generated
+}
+
 export class KeyGuardConfig {
   readonly databaseUrl: string
   readonly redisUrl: string | null
   readonly secretKey: string
+  readonly adminKey: string
   readonly defaultRateLimitPerMinute: number
   readonly ipBlockThreshold: number
   readonly isSqlite: boolean
@@ -42,23 +66,8 @@ export class KeyGuardConfig {
     this.defaultRateLimitPerMinute = opts.defaultRateLimitPerMinute ?? 60
     this.ipBlockThreshold = opts.ipBlockThreshold ?? 100
 
-    const providedKey = opts.secretKey ?? process.env.SECRET_KEY ?? null
-    if (providedKey && !INSECURE_KEYS.has(providedKey)) {
-      this.secretKey = providedKey
-    } else {
-      const generated = crypto.randomBytes(32).toString("base64url")
-      writeEnvVar("SECRET_KEY", generated)
-      console.warn(
-        `\n${"=".repeat(70)}` +
-        `\n  SECRET_KEY not set — auto-generated and saved to .env:\n` +
-        `\n    ${generated}\n` +
-        `\n  It will be loaded automatically on next start.` +
-        `\n  To use your own:` +
-        `\n    new KeyGuardConfig({ secretKey: 'your-key' })` +
-        `\n${"=".repeat(70)}`
-      )
-      this.secretKey = generated
-    }
+    this.secretKey = resolveKey(opts.secretKey, "SECRET_KEY", "secretKey")
+    this.adminKey = resolveKey(opts.adminKey, "ADMIN_KEY", "adminKey")
 
     this.isSqlite = this.databaseUrl.startsWith("sqlite")
     this.isRedisEnabled = this.redisUrl !== null

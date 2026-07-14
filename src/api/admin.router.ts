@@ -1,13 +1,21 @@
+import * as crypto from "crypto"
 import { Router, Request, Response } from "express"
 import { KeyGuard } from "../core"
 import { OrgCreateSchema, KeyCreateSchema } from "../schemas/admin"
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return crypto.timingSafeEqual(bufA, bufB)
+}
 
 export function createAdminRouter(kg: KeyGuard): Router {
   const router = Router()
 
   function verifyAdmin(req: Request, res: Response, next: () => void): void {
     const key = req.headers["x-admin-key"] as string | undefined
-    if (!key || key !== kg.config.secretKey) {
+    if (!key || !constantTimeEqual(key, kg.config.adminKey)) {
       res.status(403).json({ detail: "Invalid admin key." })
       return
     }
