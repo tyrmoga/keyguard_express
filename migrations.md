@@ -84,6 +84,10 @@ Incoming Request
 | (new) | `src/types.ts` | Consolidated TypeScript interfaces. |
 | (new) | `src/utils.ts` | secondsUntilTime, clientIp helpers. |
 | (new) | `src/guards/scopes.ts` | requireScope middleware factory. |
+| (new) | `src/guards/headers.ts` | Security headers (helmet preset). |
+| (new) | `src/guards/cors.ts` | CORS middleware (per-org origins). |
+| (new) | `src/guards/validate.ts` | Zod-based body/query validation + bodyParser helper. |
+| (new) | `src/guards/hmac.ts` | HMAC request signing verification middleware. |
 | (new) | `src/__tests__/run.ts` | Test suite (npm test). |
 
 ---
@@ -198,9 +202,16 @@ curl http://localhost:8000/api/data -H "X-API-KEY: kg_live_..."
 - ✅ Separate admin key (independent from hashing pepper)
 - ✅ Key rotation support (`rotates_to_id` column + rotate endpoint)
 - ✅ Test suite (`npm test` — secondsUntilTime, clientIp, AuthService, MemoryRateLimitService)
+- ✅ Security headers (`src/guards/headers.ts`)
+- ✅ CORS middleware with per-org origins (`src/guards/cors.ts`)
+- ✅ Zod-based body/query validation (`src/guards/validate.ts`)
+- ✅ HMAC request signing verification (`src/guards/hmac.ts`)
 
 ## 10. Future Work
 
 - Add PostgreSQL driver option
 - Add CI/CD pipeline
 - Publish to npm
+- Tier 3: Token-bucket rate limiter, per-route limits, IP allowlisting
+- Tier 4: Scoped admin roles, admin audit log, alerting hooks
+- Tier 5: Async write path, health endpoint, graceful shutdown

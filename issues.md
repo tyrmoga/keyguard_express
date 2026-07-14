@@ -34,3 +34,12 @@ This document tracks all known issues, their fix status in the Express port, and
 
 _All known issues from the original Python audit are now resolved._
 
+### Tier 2 features added
+
+| # | Feature | File | Status |
+|---|---------|------|--------|
+| 23 | Security headers (helmet preset) | `src/guards/headers.ts` | ✅ |
+| 24 | CORS middleware (per-org origins) | `src/guards/cors.ts` | ✅ |
+| 25 | Request body/query validation (Zod) | `src/guards/validate.ts` | ✅ |
+| 26 | HMAC request signing verification | `src/guards/hmac.ts` | ✅ |
+

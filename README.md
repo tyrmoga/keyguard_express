@@ -17,6 +17,10 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 - **Salted Key Hashing** — per-key PBKDF2-SHA512 with 100k iterations (backward-compatible, old keys keep working)
 - **Reverse Proxy Aware** — `X-Forwarded-For` respected when present
 - **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
+- **Security Headers** — `app.use(headers())` — helmet preset tuned for APIs
+- **CORS** — `app.use(corsMiddleware(kg))` — per-org allowed origins from DB
+- **Body Validation** — `validateBody(schema)` / `validateQuery(schema)` with Zod
+- **HMAC Signing** — `requireHmac({ secret })` — webhook request verification
 - **CLI** — `keyguard init`, `create-org`, `create-key`, `list-keys`, `revoke-key`, `stats`
 
 ## Install
@@ -126,7 +130,65 @@ app.post("/heavy-task", rateLimitByIp(kg, 1, 60, 3600, "path"), handler)
 // DELETE /admin/keys/<old_key_id>
 ```
 
-### 7. Block an abusive client
+### 7. Security headers, CORS, and body validation
+
+```ts
+import { headers, corsMiddleware, validateBody, validateQuery } from "keyguard-express"
+import { z } from "zod"
+
+// Security headers (helmet preset, CSP disabled for API use)
+app.use(headers())
+
+// CORS — per-org origins loaded from DB (falls back to allow-all if none configured)
+app.use(corsMiddleware(kg))
+
+// Body validation with Zod schemas
+const CreateUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  role: z.enum(["admin", "user"]).default("user"),
+})
+app.post("/users", validateBody(CreateUserSchema), handler)
+
+// Query parameter validation
+const PaginationSchema = z.object({ page: z.coerce.number().int().min(1).default(1) })
+app.get("/items", validateQuery(PaginationSchema), handler)
+```
+
+### 8. HMAC-signed webhook verification
+
+```ts
+import { requireHmac } from "keyguard-express"
+
+// Verifies X-Signature, X-Timestamp, X-Nonce headers
+// Rejects requests with clock skew > 300s (configurable)
+app.post("/webhook/payment",
+  requireHmac({ secret: process.env.WEBHOOK_SECRET! }),
+  (req, res) => {
+    // Payload is verified — process the webhook
+    res.json({ status: "ok" })
+  })
+```
+
+To sign a request from your client:
+
+```bash
+# Compute the HMAC payload: "{timestamp}.{nonce}.{method}.{path}.{body}"
+TIMESTAMP=$(date +%s)
+NONCE=$(uuidgen)
+PAYLOAD='{"event":"test"}'
+SIGNATURE=$(echo -n "$TIMESTAMP.$NONCE.POST./webhook.$PAYLOAD" | \
+  openssl dgst -sha256 -hmac "your-secret" | cut -d' ' -f2)
+
+curl -X POST https://api.example.com/webhook \
+  -H "Content-Type: application/json" \
+  -H "x-signature: $SIGNATURE" \
+  -H "x-timestamp: $TIMESTAMP" \
+  -H "x-nonce: $NONCE" \
+  -d "$PAYLOAD"
+```
+
+### 9. Block an abusive client
 
 ```ts
 app.post("/login", async (req, res, next) => {

@@ -19,15 +19,15 @@ The DB and admin API already supported these fields; the middleware now enforces
 
 ---
 
-## Tier 2 — Standard Express Hardening (opt-in wrappers)
+## Tier 2 — Standard Express Hardening ✅
 
 These are thin wrappers around well-audited libraries, shipped as re-exports or convenience presets. Not reinventions.
 
-- **Security headers** — a `helmet` preset tuned for APIs (CSP relaxed, HSTS on). One import: `app.use(keyguard.headers())`.
-- **CORS helper** — a `corsMiddleware(kg)` that can pull allowed origins per-org from the DB, tying into the multi-tenant model.
-- **Body-size / JSON limits** — sensible defaults (`10kb`) on `express.json()`, since unbounded body parsing is a common unguarded DoS vector. Overridable.
-- **Request validation middleware** — expose `validateBody(schema)` / `validateQuery(schema)` factories using the Zod already in the dependency tree, so consumers get the same ergonomics as the admin API for their own routes.
-- **HMAC request signing middleware** — verify `X-Signature` / `X-Timestamp` / `X-Nonce` headers with a replay-window check. Directly applicable to M-Pesa/Daraja webhook integration work; natural fit next to API-key auth.
+- **Security headers** — `app.use(headers())` — helmet preset tuned for APIs (CSP relaxed, HSTS on). ✅
+- **CORS helper** — `app.use(corsMiddleware(kg))` — pulls allowed origins per-org from the DB. ✅
+- **Body-size / JSON limits** — `express.json({ limit: "10kb" })` documented as recommended practice. ✅
+- **Request validation middleware** — `validateBody(schema)` / `validateQuery(schema)` factories using Zod. ✅
+- **HMAC request signing middleware** — `requireHmac({ secret })` verifies `X-Signature` / `X-Timestamp` / `X-Nonce` with replay-window check. ✅
 
 ---
 
@@ -63,7 +63,7 @@ Relevant for SaaS work: the current single shared `X-Admin-Key` authenticates al
 ## Implementation Notes
 
 - **Tier 1 files**: `src/middleware.ts` (expires_at, monthly_limit) + new `src/guards/scopes.ts` (requireScope factory).
-- **Tier 2 files**: Each wrapper gets its own file under `src/guards/` — `headers.ts`, `cors.ts`, `validate.ts`, `hmac.ts` — and is exported from `src/index.ts`.
+- **Tier 2 files**: `src/guards/headers.ts`, `cors.ts`, `validate.ts`, `hmac.ts` — all exported from `src/index.ts`. ✅
 - **Tier 3 files**: Extends `src/services/` with token-bucket backend; adds `route_limits` table to `src/db/models.ts` and `src/db/schema.ts`.
 - **Tier 4 files**: Extends `src/schemas/admin.ts` with role schemas; adds `admin_audit_log` table; adds callback registration to `src/core.ts`.
 - **Tier 5 files**: New `src/db/pg.ts` adapter; new `src/health.ts`; `src/index.ts` gets `shutdown()` export; test suite under `src/__tests__/`.

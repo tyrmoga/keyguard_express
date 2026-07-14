@@ -1,6 +1,10 @@
 import "dotenv/config"
 import express, { Request, Response } from "express"
-import { KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp, requireScope } from "../src"
+import { z } from "zod"
+import {
+  KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp,
+  requireScope, headers, corsMiddleware, validateBody, requireHmac,
+} from "../src"
 import { createAdminRouter } from "../src/api/admin.router"
 
 // 1. Configure (keys auto-generated and persisted to .env if not provided)
@@ -14,7 +18,11 @@ const kg = new KeyGuard(config)
 const PORT = parseInt(process.env.PORT || "8000", 10)
 
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: "10kb" }))
+
+// Tier 2: Security headers + CORS (opt-in Express hardening)
+app.use(headers())
+app.use(corsMiddleware(kg))
 
 // 2. Initialize database and seed data
 kg.initDb()
@@ -42,6 +50,23 @@ app.post("/signup", rateLimitByIp(kg, 2, 3600, "11:59 PM", "global"), (_req: Req
 app.post("/heavy-task", rateLimitByIp(kg, 1, 60, 3600, "path"), (_req: Request, res: Response) => {
   res.json({ message: "Heavy task completed successfully!" })
 })
+
+// Tier 2: Body validation with Zod
+const ContactSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  message: z.string().min(1).max(1000),
+})
+app.post("/contact", validateBody(ContactSchema), (req: Request, res: Response) => {
+  res.json({ received: req.body })
+})
+
+// Tier 2: HMAC-signed webhook endpoint
+app.post("/webhook",
+  requireHmac({ secret: config.secretKey }),
+  (req: Request, res: Response) => {
+    res.json({ status: "verified", payload: req.body })
+  })
 
 app.get("/api/data", requireScope("read"), (req: Request, res: Response) => {
   const key = (req as any).apiKey
