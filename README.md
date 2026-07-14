@@ -64,10 +64,10 @@ Most inherited bugs from the original Python codebase have been fixed. Remaining
 |----------|-------|--------|
 | HIGH | Weak SHA-256 hashing (no per-key salt, no KDF) | Open — needs bcrypt/PBKDF2 |
 | HIGH | Zero test coverage | Open |
-| MEDIUM | Memory leak — `cleanup()` never called | Open |
-| LOW | Usage logs only capture authorized requests | Open |
-| LOW | Key prefix collisions (24-bit entropy) | Open |
 | LOW | Reverse proxy IP controls require consumer `app.set('trust proxy', ...)` | Open |
+| MEDIUM | Memory leak — `cleanup()` never called | **Fixed** — `setInterval` in constructor prunes stale entries every 2min |
+| LOW | Usage logs only capture authorized requests | **Fixed** — expired, monthly-capped, and rate-limited requests now logged |
+| LOW | Key prefix collisions (24-bit entropy) | **Fixed** — prefix length increased to 20 chars (72-bit entropy) |
 
 For the full issue history and all fixed items, see [`issues.md`](issues.md).
 

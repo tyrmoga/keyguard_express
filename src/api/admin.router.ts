@@ -68,7 +68,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
     const apiKey = kg.db.createApiKey({
       org_id: org.id,
       label: parsed.data.label,
-      prefix: rawKey.slice(0, 12),
+      prefix: rawKey.slice(0, 20),
       key_hash: keyHash,
       rate_limit_per_minute: parsed.data.rate_limit_per_minute,
       scopes: parsed.data.scopes,

@@ -5,6 +5,12 @@ export class MemoryRateLimitService implements IRateLimitBackend {
   private _abuseCounts = new Map<string, [number, number]>()
   private _blocked = new Map<string, number>()
   private _lock = Promise.resolve()
+  private _timer: ReturnType<typeof setInterval>
+
+  constructor() {
+    this._timer = setInterval(() => this.cleanup(), 120_000)
+    this._timer.unref()
+  }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     const unlock = this._lock
@@ -77,6 +83,10 @@ export class MemoryRateLimitService implements IRateLimitBackend {
         this._blocked.set(ipAddress, now + 86400)
       }
     })
+  }
+
+  stopCleanup(): void {
+    clearInterval(this._timer)
   }
 
   cleanup(): void {

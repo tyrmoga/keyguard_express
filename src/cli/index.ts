@@ -79,7 +79,7 @@ program
     const apiKey = kg.db.createApiKey({
       org_id: org.id,
       label: args.label,
-      prefix: rawKey.slice(0, 12),
+      prefix: rawKey.slice(0, 20),
       key_hash: keyHash,
       rate_limit_per_minute: rateLimit,
       scopes,

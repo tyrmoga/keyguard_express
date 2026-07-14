@@ -38,6 +38,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       if (keyObj.expires_at) {
         const expiresAt = new Date(keyObj.expires_at)
         if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
+          setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 401, 0, ipAddress))
           return void res.status(401).json({ detail: "API Key has expired." })
         }
       }
@@ -46,6 +47,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       if (keyObj.monthly_limit) {
         const monthlyUsage = kg.db.getMonthlyUsage(keyObj.id)
         if (monthlyUsage >= keyObj.monthly_limit) {
+          setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 429, 0, ipAddress))
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
         }
       }
@@ -54,6 +56,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       const { limited, remaining } = await kg.rateLimiting.isRateLimited(keyHash, keyObj.rate_limit_per_minute)
 
       if (limited) {
+        setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 429, 0, ipAddress))
         res.set("X-RateLimit-Limit", String(keyObj.rate_limit_per_minute))
         res.set("X-RateLimit-Remaining", "0")
         return void res.status(429).json({ detail: "Rate limit exceeded." })
