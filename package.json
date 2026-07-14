@@ -2,17 +2,42 @@
   "name": "keyguard-express",
   "version": "0.3.0",
   "description": "API key authentication, rate limiting, and abuse prevention as a drop-in Express.js library.",
+  "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "keyguard": "dist/cli/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "express",
+    "middleware",
+    "api-key",
+    "authentication",
+    "rate-limiting",
+    "security",
+    "hmac",
+    "cors",
+    "helmet",
+    "cli"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch examples/basic.ts",
     "start": "tsx examples/basic.ts",
     "cli": "tsx src/cli/index.ts",
-    "test": "tsx src/__tests__/run.ts"
+    "test": "tsx src/__tests__/run.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "peerDependencies": {
+    "express": ">=4.0.0"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
@@ -20,7 +45,6 @@
     "commander": "^12.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.0",
-    "express": "^4.21.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.4.0",
     "pg": "^8.22.0",
@@ -34,6 +58,7 @@
     "@types/express": "^4.17.21",
     "@types/pg": "^8.20.0",
     "@types/uuid": "^10.0.0",
+    "express": "^4.21.0",
     "tsx": "^4.7.0",
     "typescript": "^5.5.0"
   }
