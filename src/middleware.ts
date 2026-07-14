@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express"
+import * as crypto from "crypto"
 import { KeyGuard } from "./core"
 import { clientIp, checkIpAllowlist } from "./utils"
 
@@ -48,7 +49,9 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       // 3b. Salted hash verification (backward-compatible: old keys have no salt, skip this step)
       if (keyObj.key_salt) {
         const stretched = kg.auth.stretchKey(apiKeyRaw, keyObj.key_salt)
-        if (stretched !== keyObj.key_hash_stretched) {
+        const a = Buffer.from(stretched)
+        const b = Buffer.from(keyObj.key_hash_stretched!)
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
           await kg.rateLimiting.trackIpAbuse(ipAddress, kg.config.ipBlockThreshold)
           return void res.status(401).json({ detail: "Invalid or inactive API Key." })
         }
