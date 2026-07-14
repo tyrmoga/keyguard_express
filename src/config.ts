@@ -20,7 +20,7 @@ function writeEnvVar(key: string, value: string): void {
       fs.writeFileSync(ENV_PATH, content, "utf-8")
     } else {
       fs.mkdirSync(path.dirname(ENV_PATH), { recursive: true })
-      fs.writeFileSync(ENV_PATH, `# KeyGuard auto-generated secret key — keep this file secure\n${line}`, "utf-8")
+      fs.writeFileSync(ENV_PATH, `# KeyGuard auto-generated keys — keep this file secure\n${line}`, "utf-8")
     }
   } catch {
     // best-effort; if .env can't be written, the key is still valid in-memory this session
@@ -66,8 +66,8 @@ export class KeyGuardConfig {
     this.defaultRateLimitPerMinute = opts.defaultRateLimitPerMinute ?? 60
     this.ipBlockThreshold = opts.ipBlockThreshold ?? 100
 
-    this.secretKey = resolveKey(opts.secretKey, "SECRET_KEY", "secretKey")
-    this.adminKey = resolveKey(opts.adminKey, "ADMIN_KEY", "adminKey")
+    this.secretKey = resolveKey(opts.secretKey, "KG_SECRET_KEY", "secretKey")
+    this.adminKey = resolveKey(opts.adminKey, "KG_ADMIN_KEY", "adminKey")
 
     this.isSqlite = this.databaseUrl.startsWith("sqlite")
     this.isRedisEnabled = this.redisUrl !== null
