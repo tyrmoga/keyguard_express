@@ -2,7 +2,9 @@ import { Request } from "express"
 import { KeyGuardConfig } from "./config"
 import { AuthService } from "./services/auth.service"
 import { MemoryRateLimitService } from "./services/memory-rate-limit.service"
+import { TokenBucketRateLimitService } from "./services/token-bucket.service"
 import { RateLimitService } from "./services/rate-limit.service"
+import { HybridRateLimitService } from "./services/hybrid-rate-limit.service"
 import { KeyGuardDb } from "./db/models"
 import { IRateLimitBackend } from "./types"
 import { clientIp, secondsUntilTime } from "./utils"
@@ -19,7 +21,7 @@ export class KeyGuard {
     this.db = new KeyGuardDb(config.databaseUrl)
 
     if (config.isRedisEnabled) {
-      this.rateLimiting = new RateLimitService(config.redisUrl!)
+      this.rateLimiting = new HybridRateLimitService(config.redisUrl!)
     } else {
       this.rateLimiting = new MemoryRateLimitService()
     }

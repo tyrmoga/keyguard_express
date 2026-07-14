@@ -42,4 +42,8 @@ _All known issues from the original Python audit are now resolved._
 | 24 | CORS middleware (per-org origins) | `src/guards/cors.ts` | ✅ |
 | 25 | Request body/query validation (Zod) | `src/guards/validate.ts` | ✅ |
 | 26 | HMAC request signing verification | `src/guards/hmac.ts` | ✅ |
+| 27 | Token-bucket rate limiter | `src/services/token-bucket.service.ts` | ✅ |
+| 28 | Per-route limits from DB | `src/db/models.ts` + middleware | ✅ |
+| 29 | IP allowlisting per key | `src/db/models.ts` allowed_ips + middleware | ✅ |
+| 30 | Distributed blocklist sync (hybrid backend) | `src/services/hybrid-rate-limit.service.ts` | ✅ |
 

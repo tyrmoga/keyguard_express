@@ -8,7 +8,9 @@ export { validateBody, validateQuery, bodyParser } from "./guards/validate"
 export { requireHmac } from "./guards/hmac"
 export { AuthService } from "./services/auth.service"
 export { MemoryRateLimitService } from "./services/memory-rate-limit.service"
+export { TokenBucketRateLimitService } from "./services/token-bucket.service"
 export { RateLimitService } from "./services/rate-limit.service"
+export { HybridRateLimitService } from "./services/hybrid-rate-limit.service"
 export { createAdminRouter } from "./api/admin.router"
 export { KeyGuardDb } from "./db/models"
 
@@ -23,4 +25,5 @@ export type {
   OrgResponse,
   KeyResponse,
   StatsResponse,
+  RouteLimitRow,
 } from "./types"

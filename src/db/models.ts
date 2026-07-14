@@ -1,6 +1,6 @@
 import Database from "better-sqlite3"
 import { v4 as uuid } from "uuid"
-import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput } from "../types"
+import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput, RouteLimitRow } from "../types"
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS usage_logs (
   ip_address  TEXT NOT NULL,
   timestamp   TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS route_limits (
+  id             TEXT PRIMARY KEY,
+  org_id         TEXT NOT NULL REFERENCES organizations(id),
+  path           TEXT NOT NULL,
+  method         TEXT NOT NULL DEFAULT 'ALL',
+  max_requests   INTEGER NOT NULL DEFAULT 60,
+  window_seconds INTEGER NOT NULL DEFAULT 60,
+  UNIQUE(org_id, path, method)
+);
 `
 
 export class KeyGuardDb {
@@ -66,6 +76,9 @@ export class KeyGuardDb {
     }
     if (!hasColumn("key_hash_stretched")) {
       this.db.exec("ALTER TABLE api_keys ADD COLUMN key_hash_stretched TEXT")
+    }
+    if (!hasColumn("allowed_ips")) {
+      this.db.exec("ALTER TABLE api_keys ADD COLUMN allowed_ips TEXT")
     }
   }
 
@@ -105,15 +118,15 @@ export class KeyGuardDb {
     const id = uuid()
     this.db
       .prepare(
-        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id, key_salt, key_hash_stretched)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO api_keys (id, org_id, label, prefix, key_hash, rate_limit_per_minute, scopes, monthly_limit, expires_at, rotates_to_id, key_salt, key_hash_stretched, allowed_ips)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id, row.org_id, row.label, row.prefix, row.key_hash,
         row.rate_limit_per_minute, JSON.stringify(row.scopes),
         row.monthly_limit ?? null, row.expires_at ?? null,
         row.rotates_to_id ?? null, row.key_salt ?? null,
-        row.key_hash_stretched ?? null,
+        row.key_hash_stretched ?? null, row.allowed_ips ?? null,
       )
     return this.getApiKey(id)!
   }
@@ -219,6 +232,41 @@ export class KeyGuardDb {
       .all() as any
 
     return { orgCount, totalKeys, activeKeys, totalRequests, recentRequests, errorCount, topKeys }
+  }
+
+  // ── Route Limits ──
+
+  listRouteLimits(orgId: string): RouteLimitRow[] {
+    return this.db
+      .prepare("SELECT * FROM route_limits WHERE org_id = ? ORDER BY path")
+      .all(orgId) as any
+  }
+
+  getRouteLimit(orgId: string, path: string, method: string): RouteLimitRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM route_limits WHERE org_id = ? AND path = ? AND (method = ? OR method = 'ALL') ORDER BY method DESC LIMIT 1")
+      .get(orgId, path, method) as any
+  }
+
+  upsertRouteLimit(orgId: string, path: string, method: string, maxRequests: number, windowSeconds: number): RouteLimitRow {
+    const existing = this.db
+      .prepare("SELECT id FROM route_limits WHERE org_id = ? AND path = ? AND method = ?")
+      .get(orgId, path, method) as any
+    if (existing) {
+      this.db
+        .prepare("UPDATE route_limits SET max_requests = ?, window_seconds = ? WHERE id = ?")
+        .run(maxRequests, windowSeconds, existing.id)
+      return this.db.prepare("SELECT * FROM route_limits WHERE id = ?").get(existing.id) as any
+    }
+    const id = uuid()
+    this.db
+      .prepare("INSERT INTO route_limits (id, org_id, path, method, max_requests, window_seconds) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, orgId, path, method, maxRequests, windowSeconds)
+    return this.db.prepare("SELECT * FROM route_limits WHERE id = ?").get(id) as any
+  }
+
+  deleteRouteLimit(id: string): void {
+    this.db.prepare("DELETE FROM route_limits WHERE id = ?").run(id)
   }
 
   close(): void {

@@ -1,5 +1,6 @@
 import * as crypto from "crypto"
 import { Router, Request, Response } from "express"
+import { z } from "zod"
 import { KeyGuard } from "../core"
 import { OrgCreateSchema, KeyCreateSchema, RotationSchema } from "../schemas/admin"
 
@@ -144,6 +145,35 @@ export function createAdminRouter(kg: KeyGuard): Router {
   })
 
   // ── Stats ──
+
+  // ── Route Limits ──
+
+  router.get("/orgs/:orgId/route-limits", verifyAdmin, (req: Request, res: Response) => {
+    const org = kg.db.getOrganization(req.params.orgId)
+    if (!org) return void res.status(404).json({ detail: "Organization not found." })
+    const limits = kg.db.listRouteLimits(org.id)
+    res.json({ route_limits: limits })
+  })
+
+  router.put("/orgs/:orgId/route-limits", verifyAdmin, (req: Request, res: Response) => {
+    const org = kg.db.getOrganization(req.params.orgId)
+    if (!org) return void res.status(404).json({ detail: "Organization not found." })
+    const schema = z.object({
+      path: z.string().min(1),
+      method: z.string().default("ALL"),
+      max_requests: z.number().int().min(1).max(100000).default(60),
+      window_seconds: z.number().int().min(1).max(86400).default(60),
+    })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
+    const rl = kg.db.upsertRouteLimit(org.id, parsed.data.path, parsed.data.method, parsed.data.max_requests, parsed.data.window_seconds)
+    res.json(rl)
+  })
+
+  router.delete("/route-limits/:id", verifyAdmin, (req: Request, res: Response) => {
+    kg.db.deleteRouteLimit(req.params.id)
+    res.json({ detail: "Route limit deleted." })
+  })
 
   router.get("/stats", verifyAdmin, (_req: Request, res: Response) => {
     const s = kg.db.getStats()

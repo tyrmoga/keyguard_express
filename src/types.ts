@@ -30,6 +30,7 @@ export interface ApiKeyRow {
   rotates_to_id?: string | null
   key_salt?: string | null
   key_hash_stretched?: string | null
+  allowed_ips?: string | null
 }
 
 export interface CreateApiKeyInput {
@@ -44,6 +45,16 @@ export interface CreateApiKeyInput {
   rotates_to_id?: string | null
   key_salt?: string | null
   key_hash_stretched?: string | null
+  allowed_ips?: string | null
+}
+
+export interface RouteLimitRow {
+  id: string
+  org_id: string
+  path: string
+  method: string
+  max_requests: number
+  window_seconds: number
 }
 
 export interface UsageLogRow {

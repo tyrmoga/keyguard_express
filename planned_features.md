@@ -31,12 +31,12 @@ These are thin wrappers around well-audited libraries, shipped as re-exports or 
 
 ---
 
-## Tier 3 — Abuse Prevention Beyond Flat Rate Limits
+## Tier 3 — Abuse Prevention Beyond Flat Rate Limits ✅
 
-- **Token-bucket rate limiter** — alongside the existing sliding window, offer a token-bucket backend so consumers can allow short bursts without raising the sustained ceiling.
-- **Per-route limits from the DB** — a `route_limits` table so an org can configure `/heavy-task` at 5/min and `/data` at 1000/min without custom middleware per route.
-- **IP allowlisting per key** — restrict an API key to specific IPs or CIDR ranges. Valuable for server-to-server integrations (ERP, middleware).
-- **Distributed blocklist sync** — extend IP blocks to propagate across instances even when using the in-memory rate limiter for counting. Hybrid mode: memory for counters, Redis just for the blocklist.
+- **Token-bucket rate limiter** — `TokenBucketRateLimitService` alongside the sliding window. ✅
+- **Per-route limits from the DB** — `route_limits` table + admin API + middleware enforcement. ✅
+- **IP allowlisting per key** — `allowed_ips` JSON column + `checkIpAllowlist()` in middleware. ✅
+- **Distributed blocklist sync** — `HybridRateLimitService` (memory counting + Redis blocks) auto-selected when `REDIS_URL` is set. ✅
 
 ---
 
@@ -64,7 +64,7 @@ Relevant for SaaS work: the current single shared `X-Admin-Key` authenticates al
 
 - **Tier 1 files**: `src/middleware.ts` (expires_at, monthly_limit) + new `src/guards/scopes.ts` (requireScope factory).
 - **Tier 2 files**: `src/guards/headers.ts`, `cors.ts`, `validate.ts`, `hmac.ts` — all exported from `src/index.ts`. ✅
-- **Tier 3 files**: Extends `src/services/` with token-bucket backend; adds `route_limits` table to `src/db/models.ts` and `src/db/schema.ts`.
+- **Tier 3 files**: `src/services/token-bucket.service.ts`, `src/services/hybrid-rate-limit.service.ts`, `route_limits` table + `allowed_ips` column in `src/db/models.ts`, middleware IP/route checks, admin route-limit endpoints. ✅
 - **Tier 4 files**: Extends `src/schemas/admin.ts` with role schemas; adds `admin_audit_log` table; adds callback registration to `src/core.ts`.
 - **Tier 5 files**: New `src/db/pg.ts` adapter; new `src/health.ts`; `src/index.ts` gets `shutdown()` export; test suite under `src/__tests__/`.
 

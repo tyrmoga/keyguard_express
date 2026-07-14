@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express"
 import { KeyGuard } from "./core"
-import { clientIp, secondsUntilTime } from "./utils"
+import { clientIp, checkIpAllowlist, secondsUntilTime } from "./utils"
 
 export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -34,7 +34,12 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         return void res.status(401).json({ detail: "Invalid or inactive API Key." })
       }
 
-      // 3a. Salted hash verification (backward-compatible: old keys have no salt, skip this step)
+      // 3a. IP allowlist check
+      if (!checkIpAllowlist(ipAddress, keyObj.allowed_ips)) {
+        return void res.status(403).json({ detail: "Access denied. IP not allowed for this key." })
+      }
+
+      // 3b. Salted hash verification (backward-compatible: old keys have no salt, skip this step)
       if (keyObj.key_salt) {
         const stretched = kg.auth.stretchKey(apiKeyRaw, keyObj.key_salt)
         if (stretched !== keyObj.key_hash_stretched) {
@@ -43,7 +48,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         }
       }
 
-      // 3b. Expiry Check (fail closed — unparseable dates treated as expired)
+      // 3c. Expiry Check (fail closed — unparseable dates treated as expired)
       if (keyObj.expires_at) {
         const expiresAt = new Date(keyObj.expires_at)
         if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
@@ -52,7 +57,18 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         }
       }
 
-      // 3b. Monthly Limit Check
+      // 3d. Per-route limit check
+      if (org) {
+        const routeLimit = kg.db.getRouteLimit(org.id, req.path, req.method)
+        if (routeLimit) {
+          const { limited } = await kg.rateLimiting.isRateLimited(`route:${routeLimit.id}`, routeLimit.max_requests, routeLimit.window_seconds)
+          if (limited) {
+            return void res.status(429).json({ detail: "Route rate limit exceeded." })
+          }
+        }
+      }
+
+      // 4. Monthly Limit Check
       if (keyObj.monthly_limit) {
         const monthlyUsage = kg.db.getMonthlyUsage(keyObj.id)
         if (monthlyUsage >= keyObj.monthly_limit) {
@@ -61,7 +77,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         }
       }
 
-      // 4. Rate Limiting
+      // 5. Rate Limiting
       const { limited, remaining } = await kg.rateLimiting.isRateLimited(keyHash, keyObj.rate_limit_per_minute)
 
       if (limited) {
@@ -71,16 +87,16 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         return void res.status(429).json({ detail: "Rate limit exceeded." })
       }
 
-      // 5. Attach key to request
+      // 6. Attach key to request
       ;(req as any).apiKey = keyObj
       ;(req as any).organization = org
 
-      // 5a. Deprecation header if key is being rotated
+      // 6a. Deprecation header if key is being rotated
       if (keyObj.rotates_to_id) {
         res.set("X-Key-Deprecated", `rotates-to=${keyObj.rotates_to_id}`)
       }
 
-      // 6. Capture response for logging (deferred — don't block the event loop)
+      // 7. Capture response for logging (deferred — don't block the event loop)
       const originalSend = res.send.bind(res)
       res.send = function (body: any): Response {
         const latency = Date.now() - startTime

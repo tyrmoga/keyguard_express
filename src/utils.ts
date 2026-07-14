@@ -8,6 +8,29 @@ export function clientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || "unknown"
 }
 
+import * as net from "net"
+
+export function ipInCidr(ip: string, cidr: string): boolean {
+  if (!cidr.includes("/")) return ip === cidr
+  const [range, bitsStr] = cidr.split("/")
+  const bits = parseInt(bitsStr, 10)
+  const mask = bits === 0 ? 0 : ~(2 ** (32 - bits) - 1)
+  const ipNum = ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0
+  const rangeNum = range.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0
+  return (ipNum & mask) === (rangeNum & mask)
+}
+
+export function checkIpAllowlist(ip: string, allowlistJson: string | null | undefined): boolean {
+  if (!allowlistJson) return true
+  try {
+    const ips: string[] = JSON.parse(allowlistJson)
+    if (!Array.isArray(ips) || ips.length === 0) return true
+    return ips.some((entry) => ipInCidr(ip, entry))
+  } catch {
+    return true
+  }
+}
+
 export function secondsUntilTime(targetTimeStr: string): number {
   const now = new Date()
   const formats = [

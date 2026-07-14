@@ -206,12 +206,16 @@ curl http://localhost:8000/api/data -H "X-API-KEY: kg_live_..."
 - ✅ CORS middleware with per-org origins (`src/guards/cors.ts`)
 - ✅ Zod-based body/query validation (`src/guards/validate.ts`)
 - ✅ HMAC request signing verification (`src/guards/hmac.ts`)
+- ✅ Token-bucket rate limiter (`src/services/token-bucket.service.ts`)
+- ✅ Per-route limits from DB (`route_limits` table + middleware)
+- ✅ IP allowlisting per key (`allowed_ips` column + `checkIpAllowlist()`)
+- ✅ Distributed blocklist sync (`src/services/hybrid-rate-limit.service.ts`)
 
 ## 10. Future Work
 
 - Add PostgreSQL driver option
 - Add CI/CD pipeline
 - Publish to npm
-- Tier 3: Token-bucket rate limiter, per-route limits, IP allowlisting
 - Tier 4: Scoped admin roles, admin audit log, alerting hooks
+- Tier 5: Async write path, health endpoint, graceful shutdown
 - Tier 5: Async write path, health endpoint, graceful shutdown

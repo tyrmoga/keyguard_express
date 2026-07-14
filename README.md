@@ -15,6 +15,10 @@ This is a **TypeScript fork** of the original Python project. See [`migrations.m
 - **IP Abuse Detection** — track missing/invalid key attempts, auto-block at threshold
 - **IP Blocking** — temporary or time-based blocks (global or per-path)
 - **Salted Key Hashing** — per-key PBKDF2-SHA512 with 100k iterations (backward-compatible, old keys keep working)
+- **Token Bucket** — burst-friendly rate limiting alongside sliding window
+- **Per-Route Limits** — configure `/heavy-task` at 5/min and `/data` at 1000/min from DB
+- **IP Allowlisting** — restrict keys to specific IPs or CIDR ranges
+- **Distributed Blocklist** — hybrid backend: memory counters + Redis blocklist sync
 - **Reverse Proxy Aware** — `X-Forwarded-For` respected when present
 - **Admin API** — manage organizations, keys, stats, and rotations (protected by `X-Admin-Key`)
 - **Security Headers** — `app.use(headers())` — helmet preset tuned for APIs
@@ -188,7 +192,47 @@ curl -X POST https://api.example.com/webhook \
   -d "$PAYLOAD"
 ```
 
-### 9. Block an abusive client
+### 9. Token-bucket rate limiting (burst-tolerant)
+
+```ts
+import { TokenBucketRateLimitService } from "keyguard-express"
+
+// Use instead of the sliding window for bursty workloads
+const { limited, remaining } = await limiter.isRateLimited("key-1", 10, 60)
+// Allows bursts up to 10, refills at 10/60 ≈ 0.167 tokens/sec
+```
+
+The token bucket is available as a standalone backend. The default `MemoryRateLimitService` (sliding window) is used unless you explicitly construct `TokenBucketRateLimitService`.
+
+### 10. Per-route limits (configured per org)
+
+```bash
+# Set a 5 req/min limit on /heavy-task for an org
+curl -X PUT http://localhost:3000/admin/orgs/<org-id>/route-limits \
+  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/heavy-task","method":"POST","max_requests":5,"window_seconds":60}'
+```
+
+The middleware automatically enforces route limits after the per-key rate limit. Each org has its own independent route limit table.
+
+### 11. IP allowlisting per key
+
+```bash
+# Create a key that only works from specific IPs
+curl -X POST http://localhost:3000/admin/keys \
+  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"org_name":"Acme Corp","label":"internal","allowed_ips":"[\"10.0.0.0/8\",\"192.168.1.100\"]"}'
+```
+
+Requests from IPs outside the allowlist get a 403. When `allowed_ips` is not set or empty, all IPs are accepted (backward compatible).
+
+### 12. Distributed blocklist (multi-instance with Redis)
+
+When `REDIS_URL` is configured, KeyGuard uses a **hybrid backend**: rate counting stays in-memory (fast, no Redis overhead per request), but IP blocks are synced via Redis so all instances share the same blocklist. This is automatic — no code changes needed beyond setting the env var.
+
+### 13. Block an abusive client
 
 ```ts
 app.post("/login", async (req, res, next) => {
