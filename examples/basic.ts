@@ -3,11 +3,10 @@ import express, { Request, Response } from "express"
 import { KeyGuard, KeyGuardConfig, keyGuardMiddleware, rateLimitByIp, requireScope } from "../src"
 import { createAdminRouter } from "../src/api/admin.router"
 
-// 1. Configure (just a secret key — auto-generated if not set)
+// 1. Configure (keys auto-generated and persisted to .env if not provided)
 const config = new KeyGuardConfig({
   // databaseUrl: "sqlite://keyguard.db",  // default
   // redisUrl: "redis://localhost:6379/0", // optional
-  secretKey: "my-secret",
 })
 
 const kg = new KeyGuard(config)
@@ -65,7 +64,7 @@ app.get("/api/profile", requireScope("read"), (req: Request, res: Response) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 KeyGuard is running!`)
+  console.log(`\nKeyGuard is running!`)
   console.log(`   Public:    http://localhost:${PORT}/public`)
   console.log(`   Protected: http://localhost:${PORT}/api/data`)
   console.log(`   Login:     http://localhost:${PORT}/login`)
