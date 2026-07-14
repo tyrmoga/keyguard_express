@@ -11,6 +11,7 @@ export type {
   KeyGuardConfigOptions,
   OrganizationRow,
   ApiKeyRow,
+  CreateApiKeyInput,
   UsageLogRow,
   RateLimitResult,
   IRateLimitBackend,

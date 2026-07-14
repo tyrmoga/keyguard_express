@@ -22,10 +22,19 @@ export interface ApiKeyRow {
   is_active: boolean
   scopes: string | null
   rate_limit_per_minute: number
-  monthly_limit: number | null
+  monthly_limit?: number | null
   created_at: string | null
-  expires_at: string | null
-  last_used_at: string | null
+  expires_at?: string | null
+  last_used_at?: string | null
+}
+
+export interface CreateApiKeyInput {
+  org_id: string
+  label: string
+  prefix: string
+  key_hash: string
+  rate_limit_per_minute: number
+  scopes: string[]
 }
 
 export interface UsageLogRow {

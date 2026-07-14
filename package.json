@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch examples/basic.ts",
-    "start": "node dist/examples/basic.js",
+    "start": "tsx examples/basic.ts",
     "cli": "tsx src/cli/index.ts"
   },
   "dependencies": {

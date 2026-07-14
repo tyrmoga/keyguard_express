@@ -12,6 +12,8 @@ const config = new KeyGuardConfig({
 
 const kg = new KeyGuard(config)
 
+const PORT = parseInt(process.env.PORT || "8000", 10)
+
 const app = express()
 app.use(express.json())
 
@@ -62,7 +64,6 @@ app.get("/api/profile", (req: Request, res: Response) => {
   })
 })
 
-const PORT = parseInt(process.env.PORT || "8000", 10)
 app.listen(PORT, () => {
   console.log(`\n🚀 KeyGuard is running!`)
   console.log(`   Public:    http://localhost:${PORT}/public`)

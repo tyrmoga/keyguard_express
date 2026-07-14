@@ -1,3 +1,4 @@
+import * as crypto from "crypto"
 import Redis from "ioredis"
 import { RateLimitResult, IRateLimitBackend } from "../types"
 
@@ -19,7 +20,8 @@ export class RateLimitService implements IRateLimitBackend {
     const multi = this.redis.multi()
     multi.zremrangebyscore(redisKey, 0, cutoff)
     multi.zcard(redisKey)
-    multi.zadd(redisKey, now, String(now))
+    const member = `${now}:${crypto.randomUUID()}`
+    multi.zadd(redisKey, now, member)
     multi.expire(redisKey, windowSeconds + 1)
 
     const results = await multi.exec()

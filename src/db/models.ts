@@ -1,6 +1,6 @@
 import Database from "better-sqlite3"
 import { v4 as uuid } from "uuid"
-import { OrganizationRow, ApiKeyRow, UsageLogRow } from "../types"
+import { OrganizationRow, ApiKeyRow, UsageLogRow, CreateApiKeyInput } from "../types"
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -84,7 +84,7 @@ export class KeyGuardDb {
 
   // ── API Keys ──
 
-  createApiKey(row: Omit<ApiKeyRow, "id" | "created_at" | "is_active">): ApiKeyRow {
+  createApiKey(row: CreateApiKeyInput): ApiKeyRow {
     const id = uuid()
     this.db
       .prepare(
@@ -158,7 +158,9 @@ export class KeyGuardDb {
     const activeKeys = (this.db.prepare("SELECT COUNT(*) as c FROM api_keys WHERE is_active = 1").get() as any).c
     const totalRequests = (this.db.prepare("SELECT COUNT(*) as c FROM usage_logs").get() as any).c
 
-    const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString()
+    const d = new Date(Date.now() - 3600 * 1000)
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const oneHourAgo = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
     const recentRequests = (
       this.db.prepare("SELECT COUNT(*) as c FROM usage_logs WHERE timestamp >= ?").get(oneHourAgo) as any
     ).c
