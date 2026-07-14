@@ -41,252 +41,144 @@ npm install keyguard-express
 
 ## How to Use in Your Project
 
-### 1. Configure and initialize
-
-`KG_SECRET_KEY` (hashing pepper) and `KG_ADMIN_KEY` (admin auth) auto-generate and persist to `.env` if not set. Or provide them explicitly:
+### Quick Start — One import, five lines
 
 ```ts
 import "dotenv/config"
 import express from "express"
-import {
-  KeyGuard, KeyGuardConfig, keyGuardMiddleware,
-  createAdminRouter, requireScope, rateLimitByIp
-} from "keyguard-express"
+import { KeyGuard, KeyGuardConfig, keyGuardMiddleware } from "keyguard-express"
 
-const config = new KeyGuardConfig({
-  // Keys auto-generate if omitted. Set your own:
-  // secretKey: process.env.KG_SECRET_KEY,
-  // adminKey: process.env.KG_ADMIN_KEY,
-
-  // Optional: databaseUrl: "sqlite://./data/keyguard.db",
-  // Optional: redisUrl: "redis://localhost:6379/0",
-})
+const config = new KeyGuardConfig()                     // auto-generates keys on first run
 const kg = new KeyGuard(config)
-kg.initDb()
+kg.initDb()                                              // creates SQLite tables + migrations
 
 const app = express()
 app.use(express.json())
+app.use(keyGuardMiddleware(kg, "/api"))                  // protects all /api routes
+app.listen(3000)
 ```
 
-### 2. Protect routes with API key auth
+Run once. On first startup `KG_SECRET_KEY` and `KG_ADMIN_KEY` are generated and persisted to `.env`. On subsequent starts they're loaded automatically. That's it — every route under `/api` now requires a valid `X-API-KEY` header. Invalid/missing keys get 401. Expired keys get 401. Rate-limited keys get 429.
+
+### What You Get Out of the Box
+
+With just `keyGuardMiddleware(kg, "/api")`, every protected request goes through:
+
+1. **IP blocklist check** — blocked IPs get 403
+2. **API key extraction** — missing keys get 401
+3. **Key lookup** — hashed against the database, invalid keys get 401; inactive orgs get 401
+4. **IP allowlisting** — if set on the key, non-matching IPs get 403
+5. **Salted hash verification** — PBKDF2-SHA512 check for keys with salt (old keys skip)
+6. **Expiry check** — expired keys get 401; keys within 7 days of expiry fire alerting hook
+7. **Per-route limits** — org-level DB-configured limits get 429
+8. **Monthly cap** — per-key monthly usage counter gets 429
+9. **Per-key rate limit** — sliding window (configurable per key) gets 429
+10. **Abuse tracking** — missing/invalid key attempts tracked; IP blocked after threshold
+
+Successful requests get `req.apiKey` and `req.organization` attached. The key's `scopes` are available for route-level guards.
+
+### Route-Level Security (opt-in middleware)
+
+**Scope enforcement** — gate routes by the key's declared scopes:
 
 ```ts
-// All routes under /api require a valid X-API-KEY header
-app.use(keyGuardMiddleware(kg, "/api"))
+import { requireScope } from "keyguard-express"
 
-// Your protected routes receive req.apiKey and req.organization
-app.get("/api/orders", (req, res) => {
-  const { apiKey, organization } = req as any
-  res.json({ org: organization.name, key: apiKey.label })
-})
+app.get("/api/orders", requireScope("read"), handler)
+app.post("/api/orders", requireScope("write"), handler)
 ```
 
-### 3. Mount the admin API (key management)
+Keys without the scope get 403. Multiple allowed scopes: `requireScope("write", "admin")`.
+
+**IP rate limiting** — brute-force protection for login, signup, or heavy endpoints (no API key needed — guards by IP):
 
 ```ts
-// Uses X-Admin-Key header for auth (separate from consumer API keys)
-app.use("/admin", createAdminRouter(kg))
+import { rateLimitByIp } from "keyguard-express"
+
+app.post("/login", rateLimitByIp(kg, 3, 60, 3600), handler)            // 3/min, 1h lockout
+app.post("/signup", rateLimitByIp(kg, 2, 3600, "11:59 PM", "global"), handler)  // time-based lockout
 ```
 
-Create an API key:
-
-```bash
-curl -X POST http://localhost:3000/admin/keys \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
-  -d '{
-    "org_name": "Acme Corp",
-    "label": "production",
-    "scopes": ["read", "write"],
-    "monthly_limit": 50000,
-    "expires_at": "2027-01-01T00:00:00Z"
-  }'
-```
-
-### 4. Enforce scopes per route
+**Body validation** — Zod schemas as Express middleware:
 
 ```ts
-// Keys without the "write" scope get a 403
-app.post("/api/orders", requireScope("write"), (req, res) => {
-  // ...
-})
-
-// Multiple allowed scopes
-app.put("/api/orders/:id", requireScope("write", "admin"), handler)
-```
-
-### 5. Rate limit by IP (login, signup, heavy endpoints)
-
-```ts
-// 3 POST/min to /login, 24h lockout on breach
-app.post("/login", rateLimitByIp(kg, 3, 60, 86400), handler)
-
-// 2 POST/3600s to /signup, lockout until 11:59 PM global
-app.post("/signup", rateLimitByIp(kg, 2, 3600, "11:59 PM", "global"), handler)
-
-// 1 POST/min to /heavy-task, 1h path-scoped lockout
-app.post("/heavy-task", rateLimitByIp(kg, 1, 60, 3600, "path"), handler)
-```
-
-### 6. Key rotation (zero-downtime credential rollover)
-
-```ts
-// Create new key, then link old → new via admin API:
-// POST /admin/keys/<old_key_id>/rotate { "target_key_id": "<new_key_id>" }
-
-// The old key returns X-Key-Deprecated: rotates-to=<new_key_id>
-// Both keys authenticate during the rotation window.
-// Consumers switch to the new key; revoke the old one when ready:
-// DELETE /admin/keys/<old_key_id>
-```
-
-### 7. Security headers, CORS, and body validation
-
-```ts
-import { headers, corsMiddleware, validateBody, validateQuery } from "keyguard-express"
+import { validateBody, validateQuery } from "keyguard-express"
 import { z } from "zod"
 
-// Security headers (helmet preset, CSP disabled for API use)
-app.use(headers())
-
-// CORS — per-org origins loaded from DB (falls back to allow-all if none configured)
-app.use(corsMiddleware(kg))
-
-// Body validation with Zod schemas
-const CreateUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(100),
-  role: z.enum(["admin", "user"]).default("user"),
-})
-app.post("/users", validateBody(CreateUserSchema), handler)
-
-// Query parameter validation
-const PaginationSchema = z.object({ page: z.coerce.number().int().min(1).default(1) })
-app.get("/items", validateQuery(PaginationSchema), handler)
+const schema = z.object({ email: z.string().email(), name: z.string().min(1) })
+app.post("/contact", validateBody(schema), handler)
+app.get("/items", validateQuery(z.object({ page: z.coerce.number().default(1) })), handler)
 ```
 
-### 8. HMAC-signed webhook verification
+**HMAC webhook verification** — timestamp + nonce + signature with replay protection:
 
 ```ts
 import { requireHmac } from "keyguard-express"
 
-// Verifies X-Signature, X-Timestamp, X-Nonce headers
-// Rejects requests with clock skew > 300s (configurable)
-app.post("/webhook/payment",
+app.post("/webhook",
   requireHmac({ secret: process.env.WEBHOOK_SECRET! }),
-  (req, res) => {
-    // Payload is verified — process the webhook
-    res.json({ status: "ok" })
-  })
+  (req, res) => res.json({ status: "verified" }))
 ```
 
-To sign a request from your client:
-
-```bash
-# Compute the HMAC payload: "{timestamp}.{nonce}.{method}.{path}.{body}"
-TIMESTAMP=$(date +%s)
-NONCE=$(uuidgen)
-PAYLOAD='{"event":"test"}'
-SIGNATURE=$(echo -n "$TIMESTAMP.$NONCE.POST./webhook.$PAYLOAD" | \
-  openssl dgst -sha256 -hmac "your-secret" | cut -d' ' -f2)
-
-curl -X POST https://api.example.com/webhook \
-  -H "Content-Type: application/json" \
-  -H "x-signature: $SIGNATURE" \
-  -H "x-timestamp: $TIMESTAMP" \
-  -H "x-nonce: $NONCE" \
-  -d "$PAYLOAD"
-```
-
-### 9. Token-bucket rate limiting (burst-tolerant)
+**Security headers & CORS** — one-liners:
 
 ```ts
-import { TokenBucketRateLimitService } from "keyguard-express"
+import { headers, corsMiddleware } from "keyguard-express"
 
-// Use instead of the sliding window for bursty workloads
-const { limited, remaining } = await limiter.isRateLimited("key-1", 10, 60)
-// Allows bursts up to 10, refills at 10/60 ≈ 0.167 tokens/sec
+app.use(headers())          // helmet preset — HSTS, X-Frame-Options, etc.
+app.use(corsMiddleware(kg)) // configure origins via options
 ```
 
-The token bucket is available as a standalone backend. The default `MemoryRateLimitService` (sliding window) is used unless you explicitly construct `TokenBucketRateLimitService`.
+### Admin & Management
 
-### 10. Per-route limits (configured per org)
-
-```bash
-# Set a 5 req/min limit on /heavy-task for an org
-curl -X PUT http://localhost:3000/admin/orgs/<org-id>/route-limits \
-  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
-  -H "Content-Type: application/json" \
-  -d '{"path":"/heavy-task","method":"POST","max_requests":5,"window_seconds":60}'
-```
-
-The middleware automatically enforces route limits after the per-key rate limit. Each org has its own independent route limit table.
-
-### 11. IP allowlisting per key
-
-```bash
-# Create a key that only works from specific IPs
-curl -X POST http://localhost:3000/admin/keys \
-  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
-  -H "Content-Type: application/json" \
-  -d '{"org_name":"Acme Corp","label":"internal","allowed_ips":"[\"10.0.0.0/8\",\"192.168.1.100\"]"}'
-```
-
-Requests from IPs outside the allowlist get a 403. When `allowed_ips` is not set or empty, all IPs are accepted (backward compatible).
-
-### 12. Distributed blocklist (multi-instance with Redis)
-
-When `REDIS_URL` is configured, KeyGuard uses a **hybrid backend**: rate counting stays in-memory (fast, no Redis overhead per request), but IP blocks are synced via Redis so all instances share the same blocklist. This is automatic — no code changes needed beyond setting the env var.
-
-### 13. Scoped admin tokens (owner vs org_admin)
-
-```bash
-# Create an org_admin token scoped to a specific org (owner only)
-curl -X POST http://localhost:3000/admin/admin-tokens \
-  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)" \
-  -H "Content-Type: application/json" \
-  -d '{"label":"acme-admin","role":"org_admin","org_name":"Acme Corp"}'
-
-# Returns a raw token (one-time display). Use it like the global admin key:
-# X-Admin-Key: <raw_token>
-
-# The global KG_ADMIN_KEY always acts as owner (full access).
-# org_admin tokens can only manage keys and route limits within their org.
-```
-
-### 14. View admin audit log (owner only)
-
-```bash
-curl http://localhost:3000/admin/audit-log \
-  -H "X-Admin-Key: $(grep KG_ADMIN_KEY .env | cut -d= -f2)"
-
-# Returns recent admin actions with IP, action type, target, and timestamp
-```
-
-### 15. Alerting hooks
+Mount the admin router to manage organizations, keys, route limits, admin tokens, and view the audit log:
 
 ```ts
-const config = new KeyGuardConfig({
-  onAbuseThreshold: (identifier, ip) => {
-    console.warn(`Abuse threshold hit: ${identifier} from ${ip}`)
-    // Send to Slack, PagerDuty, etc.
-  },
-  onKeyExpiringSoon: (key, daysLeft) => {
-    console.warn(`Key ${key.label} expires in ${daysLeft} days`)
-    // Send reminder email
-  },
+import { createAdminRouter } from "keyguard-express"
+
+app.use("/admin", createAdminRouter(kg))
+```
+
+| Endpoint | Method | Access | Purpose |
+|----------|--------|--------|---------|
+| `/admin/orgs` | GET | owner | List organizations |
+| `/admin/orgs` | POST | owner | Create organization |
+| `/admin/keys` | GET | owner | List all keys |
+| `/admin/keys` | POST | owner / org_admin | Create API key (scopes, expiry, monthly limit, IP allowlist) |
+| `/admin/keys/<id>/rotate` | POST | owner / org_admin | Link old key → new key for zero-downtime rollover |
+| `/admin/keys/<id>` | DELETE | owner / org_admin | Revoke key |
+| `/admin/orgs/<id>/route-limits` | PUT | owner / org_admin | Configure per-path rate limits |
+| `/admin/admin-tokens` | POST | owner | Create org-scoped admin token |
+| `/admin/audit-log` | GET | owner | View admin action history |
+| `/admin/stats` | GET | owner | Usage statistics |
+
+**Key rotation** (zero-downtime): create a new key, POST `/admin/keys/<old>/rotate { "target_key_id": "<new>" }`. Both keys authenticate during the transition. The old key returns `X-Key-Deprecated` header. Revoke the old key when consumers have switched.
+
+**CLI** (when admin API isn't exposed):
+
+```bash
+npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db init
+npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db create-org "Acme"
+npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db create-key --org "Acme" --label "prod"
+```
+
+### Blocking Abusive Clients
+
+```ts
+app.post("/login", async (req, res) => {
+  if (await authFailed(req.body)) {
+    await kg.blockRequest(req, 3600, "global")  // block IP for 1 hour
+    return res.status(401).json({ error: "Invalid" })
+  }
 })
 ```
 
-### 16. Block an abusive client
+### Alerting Hooks
 
 ```ts
-app.post("/login", async (req, res, next) => {
-  const failed = await authenticateUser(req.body)
-  if (!failed) return next()
-  // Block this IP for 1 hour
-  await kg.blockRequest(req, 3600, "global")
-  res.status(401).json({ error: "Invalid credentials" })
+const config = new KeyGuardConfig({
+  onAbuseThreshold: (ip) => sendSlack(`Abuse: ${ip}`),
+  onKeyExpiringSoon: (key, days) => emailAdmin(`${key.label} expires in ${days}d`),
 })
 ```
 
@@ -294,37 +186,50 @@ app.post("/login", async (req, res, next) => {
 
 | Env var | Config option | Purpose |
 |---------|--------------|---------|
-| `KG_SECRET_KEY` | `secretKey` | Pepper for API key hashing (separate from admin key) |
-| `KG_ADMIN_KEY` | `adminKey` | Authenticates `/admin/*` endpoints |
-| — | `databaseUrl` | SQLite path (`sqlite://keyguard.db`) |
-| `REDIS_URL` | `redisUrl` | Optional: enables Redis distributed rate limiting |
+| `KG_SECRET_KEY` | `secretKey` | Pepper for API key hashing |
+| `KG_ADMIN_KEY` | `adminKey` | Authenticates `/admin/*` |
+| `REDIS_URL` | `redisUrl` | Enables distributed blocklist + hybrid rate limiting |
+| — | `databaseUrl` | `sqlite://keyguard.db` (default) or `postgres://` |
 | — | `defaultRateLimitPerMinute` | Default: `60` |
-| — | `ipBlockThreshold` | Default: `100` failures/hour before IP block |
+| — | `ipBlockThreshold` | Default: `100` failures/hour before auto-block |
 
-All keys are auto-generated and written to `.env` on first run if not provided.
-
-## CLI (for servers without admin API access)
-
-```bash
-# Point at the same database
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db init
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db create-org "Acme Corp"
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db create-key --org "Acme Corp" --label "prod"
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db list-keys
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db revoke-key kg_live_abc
-npx tsx src/cli/index.ts --db sqlite:///data/keyguard.db stats
-```
+Both keys auto-generate on first run and persist to `.env`.
 
 ## Backend Auto-Detection
 
-- **Rate limiting**: No `REDIS_URL` → in-memory sliding window with mutex (single-process); `REDIS_URL` set → ioredis sorted sets (multi-instance)
-- **Database**: SQLite via better-sqlite3 (synchronous, single-process). No PostgreSQL in this port
+- **Database**: `sqlite://` → better-sqlite3 (synchronous, single-process). `postgres://` → pg pool (async, multi-instance).
+- **Rate limiting**: No Redis → in-memory sliding window. Redis → hybrid: memory for counters, Redis for blocklist sync across instances.
+
+## Design Trade-offs
+
+These are intentional. They aren't bugs — they're the result of prioritizing specific properties over others.
+
+**PBKDF2 verification runs synchronously on the hot path (~50-100ms per request).**
+Keys with salt incur 100,000 PBKDF2-SHA512 iterations per authentication. This is the cost of offline cracking resistance: the same work that makes brute-forcing expensive also makes verification slower. Old keys (no salt) skip this step and verify instantly.
+
+**SQLite writes are synchronous and deferred via `setImmediate`.**
+`better-sqlite3` is fully synchronous. Usage logging and `last_used_at` updates are deferred to the next event loop tick so the response isn't blocked, but the write itself still occupies the single-threaded event loop for the duration of the DB call (~microseconds per write). For multi-instance deployments where this is a throughput concern, use the Postgres backend (natively async).
+
+**Rate limiting defaults to sliding window, not token bucket.**
+The sliding window is strict — exactly N requests per window, no bursts. The `TokenBucketRateLimitService` exists as a separate export for burst-tolerant workloads but must be constructed manually and swapped in. There's no config flag to select it through `KeyGuardConfig`.
+
+**HMAC nonces live in process memory, not Redis.**
+Replay-protection nonces are stored in a `Map` scoped to the current Node process. Two instances behind a load balancer won't share nonce state — a replay could succeed against a different instance within the clock-skew window. Acceptable for single-process deployments; for multi-instance, use sticky sessions or accept the gap.
+
+**CORS defaults to permissive.**
+`corsMiddleware(kg)` delegates to the `cors` package with no origin restriction. Configure origins via the `options` parameter: `corsMiddleware(kg, { origin: "https://myapp.com" })`.
+
+**IP controls require `trust proxy` behind a reverse proxy.**
+`clientIp()` reads `X-Forwarded-For` when present. Express's `req.ip` (the fallback) only reflects the real client IP if `app.set('trust proxy', 1)` is configured. Without it, all clients behind nginx/Cloudflare/LB share one IP for rate-limiting and blocking purposes.
+
+**The default database is SQLite, which doesn't survive multi-instance deployments.**
+Two Node processes sharing a SQLite file with the in-memory rate limiter will each have independent rate-limit state and may contend on WAL checkpoints. For multi-instance: use the Postgres backend + Redis.
 
 ## IP Detection
 
-KeyGuard reads `X-Forwarded-For` when present, falling back to `req.ip` then `req.socket.remoteAddress`. If your Express app sets `app.set('trust proxy', 1)`, `req.ip` provides the real client IP behind nginx, Cloudflare, or an AWS ALB.
+Reads `X-Forwarded-For` → `req.ip` → `req.socket.remoteAddress`. If `app.set('trust proxy', 1)` is configured in your Express app, `req.ip` provides the real client IP.
 
-See [`issues.md`](issues.md) for the full list of known issues and fix history.
+See [`issues.md`](issues.md) for the full issue history and fix log.
 
 ## License
 
