@@ -124,7 +124,12 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
       }
 
       next()
-    })()
+    })().catch((err) => {
+      if (!res.headersSent) {
+        res.status(500).json({ detail: "Internal server error." })
+      }
+      console.error("keyGuardMiddleware error:", err)
+    })
   }
 }
 

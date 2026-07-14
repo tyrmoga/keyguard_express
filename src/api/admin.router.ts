@@ -132,7 +132,6 @@ export function createAdminRouter(kg: KeyGuard): Router {
       scopes: parsed.data.scopes,
       monthly_limit: parsed.data.monthly_limit,
       expires_at: parsed.data.expires_at,
-      rotates_to_id: parsed.data.rotates_to_id,
       key_salt: keySalt,
       key_hash_stretched: stretchedHash,
     })

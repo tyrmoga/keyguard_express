@@ -46,11 +46,10 @@ export function secondsUntilTime(targetTimeStr: string): number {
     if (!m) continue
     matched = true
 
-    if (m[3] && m[3].toUpperCase() === "PM") {
-      hours = parseInt(m[1]) === 12 ? 12 : parseInt(m[1]) + 12
-      minutes = parseInt(m[2]) || 0
-    } else if (m[3] && m[3].toUpperCase() === "AM") {
-      hours = parseInt(m[1]) === 12 ? 0 : parseInt(m[1])
+    const ampm = (m[3] || m[2])?.toUpperCase?.()
+    if (ampm === "PM" || ampm === "AM") {
+      const h = parseInt(m[1])
+      hours = ampm === "PM" ? (h === 12 ? 12 : h + 12) : (h === 12 ? 0 : h)
       minutes = parseInt(m[2]) || 0
     } else {
       hours = parseInt(m[1])
