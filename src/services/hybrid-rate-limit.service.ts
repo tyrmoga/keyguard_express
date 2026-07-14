@@ -31,6 +31,13 @@ export class HybridRateLimitService implements IRateLimitBackend {
 
   async trackIpAbuse(ipAddress: string, threshold = 100): Promise<void> {
     await this.memory.trackIpAbuse(ipAddress, threshold)
+    const count = await this.redis.incr(`abuse:${ipAddress}`)
+    if (count === 1) {
+      await this.redis.expire(`abuse:${ipAddress}`, 3600)
+    }
+    if (count > threshold) {
+      await this.block(ipAddress, 86400)
+    }
   }
 
   async disconnect(): Promise<void> {

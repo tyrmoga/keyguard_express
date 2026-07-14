@@ -1,6 +1,15 @@
 import * as crypto from "crypto"
 import { Request, Response, NextFunction } from "express"
 
+const USED_NONCES = new Map<string, number>()
+
+setInterval(() => {
+  const cutoff = Date.now() / 1000 - 300
+  for (const [key, ts] of USED_NONCES) {
+    if (ts < cutoff) USED_NONCES.delete(key)
+  }
+}, 120_000).unref()
+
 export interface HmacOptions {
   secret: string
   headerSignature?: string
@@ -42,9 +51,19 @@ export function requireHmac(opts: HmacOptions) {
       return
     }
 
+    if (USED_NONCES.has(nonce)) {
+      res.status(401).json({ detail: "Nonce already used." })
+      return
+    }
+    USED_NONCES.set(nonce, now)
+
     const payload = `${ts}.${nonce}.${req.method}.${req.path}.${JSON.stringify(req.body)}`
     const expected = crypto.createHmac(algorithm, secret).update(payload).digest("hex")
 
+    if (signature.length !== expected.length) {
+      res.status(401).json({ detail: "Invalid signature." })
+      return
+    }
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
       res.status(401).json({ detail: "Invalid signature." })
       return

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS admin_tokens (
   token_hash   TEXT NOT NULL UNIQUE,
   role         TEXT NOT NULL DEFAULT 'org_admin' CHECK(role IN ('owner', 'org_admin')),
   org_id       TEXT REFERENCES organizations(id),
+  is_active    INTEGER NOT NULL DEFAULT 1,
   created_at   TEXT DEFAULT (datetime('now')),
   last_used_at TEXT
 );
@@ -70,11 +71,6 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   timestamp      TEXT DEFAULT (datetime('now'))
 );
 `
-
-function wrap<T>(fn: () => T): Promise<T> {
-  try { return Promise.resolve(fn()) }
-  catch (e) { return Promise.reject(e) }
-}
 
 export class KeyGuardDb implements IDatabaseBackend {
   private db: Database.Database
@@ -105,6 +101,12 @@ export class KeyGuardDb implements IDatabaseBackend {
     }
     if (!hasColumn("allowed_ips")) {
       this.db.exec("ALTER TABLE api_keys ADD COLUMN allowed_ips TEXT")
+    }
+    if (!hasColumn("is_active")) {
+      const adminCols = this.db.pragma("table_info(admin_tokens)") as any[]
+      if (!adminCols.some((c: any) => c.name === "is_active")) {
+        this.db.exec("ALTER TABLE admin_tokens ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+      }
     }
   }
 
@@ -230,7 +232,7 @@ export class KeyGuardDb implements IDatabaseBackend {
   }
 
   async revokeAdminToken(id: string): Promise<void> {
-    this.db.prepare("DELETE FROM admin_tokens WHERE id = ?").run(id)
+    this.db.prepare("UPDATE admin_tokens SET is_active = 0 WHERE id = ?").run(id)
   }
 
   async updateAdminTokenLastUsed(id: string): Promise<void> {

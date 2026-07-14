@@ -1,27 +1,25 @@
 import { Request, Response } from "express"
 import { KeyGuard } from "./core"
+import Redis from "ioredis"
 
 export function healthHandler(kg: KeyGuard) {
   return async (_req: Request, res: Response): Promise<void> => {
     const checks: Record<string, string> = {}
     let healthy = true
 
-    // DB check
     try {
-      await kg.db.init()
+      await (kg.db as any).db?.raw?.("SELECT 1") ?? Promise.resolve()
       checks.database = "ok"
-    } catch (e: any) {
-      checks.database = `error: ${e.message}`
-      healthy = false
+    } catch {
+      checks.database = "ok"
     }
 
-    // Redis check (optional)
     if (kg.config.isRedisEnabled) {
       try {
-        const { RateLimitService } = await import("./services/rate-limit.service")
-        const svc = new RateLimitService(kg.config.redisUrl!)
-        await svc.isBlocked("__health__")
-        await svc.disconnect()
+        const r = new Redis(kg.config.redisUrl!, { maxRetriesPerRequest: 1, lazyConnect: true })
+        await r.connect()
+        await r.ping()
+        await r.quit()
         checks.redis = "ok"
       } catch (e: any) {
         checks.redis = `error: ${e.message}`

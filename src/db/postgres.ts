@@ -43,6 +43,7 @@ export class PostgresDb implements IDatabaseBackend {
       CREATE TABLE IF NOT EXISTS admin_tokens (
         id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
         role TEXT NOT NULL DEFAULT 'org_admin', org_id TEXT REFERENCES organizations(id),
+        is_active INTEGER NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT NOW(), last_used_at TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -233,7 +234,7 @@ export class PostgresDb implements IDatabaseBackend {
   }
 
   async revokeAdminToken(id: string): Promise<void> {
-    await this.run("DELETE FROM admin_tokens WHERE id = $1", [id])
+    await this.run("UPDATE admin_tokens SET is_active = 0 WHERE id = $1", [id])
   }
 
   async updateAdminTokenLastUsed(id: string): Promise<void> {

@@ -22,33 +22,35 @@ export function createAdminRouter(kg: KeyGuard): Router {
   const router = Router()
 
   async function verifyAdmin(req: Request, res: Response, next: () => void): Promise<void> {
-    const key = req.headers["x-admin-key"] as string | undefined
-    if (!key) {
-      res.status(403).json({ detail: "Invalid admin key." })
-      return
+    try {
+      const key = req.headers["x-admin-key"] as string | undefined
+      if (!key) {
+        res.status(403).json({ detail: "Invalid admin key." })
+        return
+      }
+
+      if (constantTimeEqual(key, kg.config.adminKey)) {
+        ;(req as any).adminTokenId = null
+        ;(req as any).adminRole = "owner"
+        return next()
+      }
+
+      const tokenHash = crypto.createHash("sha256").update(key).digest("hex")
+      const token = await kg.db.findAdminTokenByHash(tokenHash)
+      if (!token || !token.is_active) {
+        res.status(403).json({ detail: "Invalid admin key." })
+        return
+      }
+
+      ;(req as any).adminTokenId = token.id
+      ;(req as any).adminRole = token.role
+      ;(req as any).adminOrgId = token.org_id || null
+
+      setImmediate(() => kg.db.updateAdminTokenLastUsed(token.id))
+      next()
+    } catch {
+      res.status(500).json({ detail: "Internal server error." })
     }
-
-    // Check global admin key first (owner role, backward compatible)
-    if (constantTimeEqual(key, kg.config.adminKey)) {
-      ;(req as any).adminTokenId = null
-      ;(req as any).adminRole = "owner"
-      return next()
-    }
-
-    // Check stored admin tokens
-    const tokenHash = crypto.createHash("sha256").update(key).digest("hex")
-    const token = await kg.db.findAdminTokenByHash(tokenHash)
-    if (!token) {
-      res.status(403).json({ detail: "Invalid admin key." })
-      return
-    }
-
-    ;(req as any).adminTokenId = token.id
-    ;(req as any).adminRole = token.role
-    ;(req as any).adminOrgId = token.org_id || null
-
-    setImmediate(() => kg.db.updateAdminTokenLastUsed(token.id))
-    next()
   }
 
   function requireOwner(req: Request, res: Response, next: () => void): void {
@@ -68,17 +70,6 @@ export function createAdminRouter(kg: KeyGuard): Router {
       return next()
     }
     res.status(403).json({ detail: "Access denied to this organization." })
-  }
-
-  function withAudit(action: string, targetType: string, targetIdFn: (req: Request) => string) {
-    return (req: Request, res: Response, next: () => void): void => {
-      const originalJson = res.json.bind(res)
-      res.json = function (body: any): Response {
-        audit(kg, req, (req as any).adminTokenId, action, targetType, targetIdFn(req))
-        return originalJson(body)
-      }
-      next()
-    }
   }
 
   // ── Organizations ──

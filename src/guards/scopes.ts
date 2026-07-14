@@ -17,7 +17,7 @@ export function requireScope(...allowed: string[]) {
 
     const hasScope = allowed.some((s) => keyScopes.includes(s))
     if (!hasScope) {
-      res.status(403).json({ detail: "Insufficient scope. Required one of: " + allowed.join(", ") })
+      res.status(403).json({ detail: "Insufficient scope." })
       return
     }
 

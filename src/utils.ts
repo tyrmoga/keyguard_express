@@ -8,8 +8,6 @@ export function clientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || "unknown"
 }
 
-import * as net from "net"
-
 export function ipInCidr(ip: string, cidr: string): boolean {
   if (!cidr.includes("/")) return ip === cidr
   const [range, bitsStr] = cidr.split("/")

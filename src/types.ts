@@ -118,6 +118,7 @@ export interface AdminTokenRow {
   token_hash: string
   role: "owner" | "org_admin"
   org_id?: string | null
+  is_active: boolean
   created_at: string | null
   last_used_at: string | null
 }

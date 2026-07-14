@@ -25,9 +25,4 @@ export function validateQuery<T extends z.ZodTypeAny>(schema: T) {
   }
 }
 
-export function bodyParser() {
-  return import("express").then(({ json, urlencoded }) => [
-    json({ limit: "10kb" }),
-    urlencoded({ extended: true, limit: "10kb" }),
-  ])
-}
+

@@ -59,7 +59,7 @@ program
   .requiredOption("--label <label>", "Key label/description")
   .option("--prefix <prefix>", "Key prefix", "kg_live_")
   .option("--rate-limit <n>", "Requests per minute", parseInt)
-  .option("--scopes <scopes>", "Comma-separated scopes", "read")
+  .option("--scopes <scopes>", "Comma-separated scopes")
   .action(async (args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
@@ -74,7 +74,7 @@ program
 
     const [rawKey, keyHash, keySalt, stretchedHash] = kg.auth.generateApiKey(args.prefix)
     const rateLimit = args.rateLimit || kg.config.defaultRateLimitPerMinute
-    const scopes = args.scopes.split(",").map((s: string) => s.trim())
+    const scopes = args.scopes ? args.scopes.split(",").map((s: string) => s.trim()) : ["read"]
 
     const apiKey = await kg.db.createApiKey({
       org_id: org.id,
