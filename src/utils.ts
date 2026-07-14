@@ -8,25 +8,28 @@ export function secondsUntilTime(targetTimeStr: string): number {
 
   let hours = 0
   let minutes = 0
+  let matched = false
 
   for (const fmt of formats) {
     const m = targetTimeStr.trim().match(fmt)
     if (!m) continue
+    matched = true
 
     if (m[3] && m[3].toUpperCase() === "PM") {
       hours = parseInt(m[1]) === 12 ? 12 : parseInt(m[1]) + 12
+      minutes = parseInt(m[2]) || 0
     } else if (m[3] && m[3].toUpperCase() === "AM") {
       hours = parseInt(m[1]) === 12 ? 0 : parseInt(m[1])
+      minutes = parseInt(m[2]) || 0
     } else {
       hours = parseInt(m[1])
       minutes = parseInt(m[2])
     }
 
-    if (m[2] && !m[3]) minutes = parseInt(m[2])
     break
   }
 
-  if (!hours && !minutes && !formats[0].test(targetTimeStr.trim())) {
+  if (!matched) {
     return 3600
   }
 
