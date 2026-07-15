@@ -4,6 +4,7 @@ export interface KeyGuardConfigOptions {
   secretKey?: string | null
   adminKey?: string | null
   defaultRateLimitPerMinute?: number
+  rateLimitBackend?: "sliding-window" | "token-bucket"
   ipBlockThreshold?: number
   onAbuseThreshold?: (identifier: string, ipAddress: string) => void
   onKeyExpiringSoon?: (key: ApiKeyRow, daysLeft: number) => void

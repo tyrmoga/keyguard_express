@@ -297,7 +297,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
   })
 
   router.get("/admin-tokens", verifyAdmin, requireOwner, async (_req: Request, res: Response) => {
-    const tokens = await kg.db.listAdminTokens()
+    const tokens = (await kg.db.listAdminTokens()).map(({ token_hash, ...t }) => t)
     res.json({ tokens, total: tokens.length })
   })
 

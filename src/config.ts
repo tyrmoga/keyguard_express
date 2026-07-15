@@ -33,7 +33,7 @@ function resolveKey(
   label: string,
 ): string {
   const provided = optsValue ?? process.env[envName] ?? null
-  if (provided && !INSECURE_KEYS.has(provided)) {
+  if (provided && !INSECURE_KEYS.has(provided) && provided.length >= 20) {
     return provided
   }
   const generated = crypto.randomBytes(32).toString("base64url")
@@ -56,6 +56,7 @@ export class KeyGuardConfig {
   readonly secretKey: string
   readonly adminKey: string
   readonly defaultRateLimitPerMinute: number
+  readonly rateLimitBackend: "sliding-window" | "token-bucket"
   readonly ipBlockThreshold: number
   readonly isSqlite: boolean
   readonly isRedisEnabled: boolean
@@ -67,6 +68,7 @@ export class KeyGuardConfig {
     this.redisUrl = opts.redisUrl ?? null
     this.defaultRateLimitPerMinute = opts.defaultRateLimitPerMinute ?? 60
     this.ipBlockThreshold = opts.ipBlockThreshold ?? 100
+    this.rateLimitBackend = opts.rateLimitBackend ?? "sliding-window"
     this.onAbuseThreshold = opts.onAbuseThreshold
     this.onKeyExpiringSoon = opts.onKeyExpiringSoon
 
