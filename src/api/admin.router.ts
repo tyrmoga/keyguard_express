@@ -175,6 +175,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
   router.post("/keys/:keyId/rotate", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
     const oldKey = await kg.db.getApiKey(req.params.keyId)
     if (!oldKey) return void res.status(404).json({ detail: "Key not found." })
+    const _oldScopedOrgId = (req as any).scopedOrgId
+    if (_oldScopedOrgId && _oldScopedOrgId !== oldKey.org_id) return void res.status(403).json({ detail: "Access denied to this organization." })
 
     const parsed = RotationSchema.safeParse(req.body)
     if (!parsed.success) return void res.status(400).json({ detail: parsed.error.flatten() })
@@ -197,6 +199,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
   router.delete("/keys/:keyId", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
     const key = await kg.db.getApiKey(req.params.keyId)
     if (!key) return void res.status(404).json({ detail: "Key not found." })
+    const _delOrgId = (req as any).scopedOrgId
+    if (_delOrgId && _delOrgId !== key.org_id) return void res.status(403).json({ detail: "Access denied to this organization." })
 
     kg.db.revokeApiKey(key.id)
     audit(kg, req, (req as any).adminTokenId, "revoke_key", "api_key", key.id)
@@ -208,6 +212,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
   router.get("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
     const org = await kg.db.getOrganization(req.params.orgId)
     if (!org) return void res.status(404).json({ detail: "Organization not found." })
+    const _rlOrgId = (req as any).scopedOrgId
+    if (_rlOrgId && _rlOrgId !== org.id) return void res.status(403).json({ detail: "Access denied to this organization." })
     const limits = await kg.db.listRouteLimits(org.id)
     res.json({ route_limits: limits })
   })
@@ -215,6 +221,8 @@ export function createAdminRouter(kg: KeyGuard): Router {
   router.put("/orgs/:orgId/route-limits", verifyAdmin, requireOrgAccess, async (req: Request, res: Response) => {
     const org = await kg.db.getOrganization(req.params.orgId)
     if (!org) return void res.status(404).json({ detail: "Organization not found." })
+    const _putOrgId = (req as any).scopedOrgId
+    if (_putOrgId && _putOrgId !== org.id) return void res.status(403).json({ detail: "Access denied to this organization." })
     const schema = z.object({
       path: z.string().min(1),
       method: z.string().default("ALL"),

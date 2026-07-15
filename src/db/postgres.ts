@@ -68,6 +68,10 @@ export class PostgresDb implements IDatabaseBackend {
     }
   }
 
+  async updateUsageLog(id: string, statusCode: number, latencyMs: number): Promise<void> {
+    await this.run("UPDATE usage_logs SET status_code = $1, latency_ms = $2 WHERE id = $3", [statusCode, latencyMs, id])
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
   }
@@ -161,12 +165,14 @@ export class PostgresDb implements IDatabaseBackend {
     return parseInt(res?.c || "0", 10)
   }
 
-  async logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<void> {
+  async logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<string> {
+    const id = uuid()
     await this.run(
       `INSERT INTO usage_logs (id, key_id, path, method, status_code, latency_ms, ip_address)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [uuid(), keyId, path, method, statusCode, latencyMs, ipAddress]
+      [id, keyId, path, method, statusCode, latencyMs, ipAddress]
     )
+    return id
   }
 
   async getStats(): Promise<{

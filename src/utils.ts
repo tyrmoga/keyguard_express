@@ -1,4 +1,5 @@
 import { Request } from "express"
+import * as net from "net"
 
 export function clientIp(req: Request): string {
   if (req.app.get("trust proxy")) {
@@ -11,6 +12,12 @@ export function clientIp(req: Request): string {
 }
 
 export function ipInCidr(ip: string, cidr: string): boolean {
+  if (cidr.includes(":") || ip.includes(":")) {
+    try {
+      const ipBuf = net.isIPv6(ip) ? (net as any).ipv6ToBytes ? (net as any).ipv6ToBytes(ip) : Buffer.alloc(0) : Buffer.alloc(0)
+      return ip === cidr // fallback to exact match for IPv6
+    } catch { return false }
+  }
   if (!cidr.includes("/")) return ip === cidr
   const [range, bitsStr] = cidr.split("/")
   const bits = parseInt(bitsStr, 10)
@@ -28,7 +35,7 @@ export function checkIpAllowlist(ip: string, allowlistJson: string | null | unde
     if (!Array.isArray(ips) || ips.length === 0) return true
     return ips.some((entry) => ipInCidr(ip, entry))
   } catch {
-    return true
+    return false
   }
 }
 
