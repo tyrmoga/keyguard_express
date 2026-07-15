@@ -32,7 +32,12 @@ function resolveKey(
   envName: string,
   label: string,
 ): string {
-  const provided = optsValue ?? process.env[envName] ?? null
+  let provided = optsValue ?? process.env[envName] ?? null
+  // Fallback: read directly from .env file if process.env is empty
+  if (!provided && fs.existsSync(ENV_PATH)) {
+    const match = fs.readFileSync(ENV_PATH, "utf-8").match(new RegExp(`^${envName}=(.+)$`, "m"))
+    if (match) provided = match[1].trim()
+  }
   if (provided && !INSECURE_KEYS.has(provided) && provided.length >= 20) {
     return provided
   }
