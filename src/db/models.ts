@@ -1,4 +1,8 @@
-import Database from "better-sqlite3"
+let _bs3: any
+function getBs3() {
+  if (!_bs3) { try { _bs3 = require("better-sqlite3") } catch { throw new Error("better-sqlite3 required. Install: npm install better-sqlite3") } }
+  return _bs3
+}
 import { v4 as uuid } from "uuid"
 import { OrganizationRow, ApiKeyRow, CreateApiKeyInput, RouteLimitRow, AdminTokenRow, AdminAuditLogRow } from "../types"
 import { IDatabaseBackend } from "./types"
@@ -73,7 +77,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 `
 
 export class KeyGuardDb implements IDatabaseBackend {
-  private db: Database.Database
+  private db: any
 
   constructor(databaseUrl: string) {
     const isSqlite = databaseUrl.startsWith("sqlite")
@@ -84,7 +88,7 @@ export class KeyGuardDb implements IDatabaseBackend {
     if (!/^[\w.\-\\\/]+$/.test(dbPath)) {
       throw new Error("Invalid database path: " + dbPath + ". Use a filesystem path without special characters.")
     }
-    this.db = new Database(dbPath)
+    this.db = new (getBs3())(dbPath)
     this.db.pragma("journal_mode = WAL")
     this.db.pragma("foreign_keys = ON")
   }
@@ -179,8 +183,10 @@ export class KeyGuardDb implements IDatabaseBackend {
     this.db.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?").run(id)
   }
 
-  async logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<void> {
-    this.db.prepare("INSERT INTO usage_logs (id, key_id, path, method, status_code, latency_ms, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)").run(uuid(), keyId, path, method, statusCode, latencyMs, ipAddress)
+  async logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<string> {
+    const id = uuid()
+    this.db.prepare("INSERT INTO usage_logs (id, key_id, path, method, status_code, latency_ms, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, keyId, path, method, statusCode, latencyMs, ipAddress)
+    return id
   }
 
   async getStats(): Promise<{ orgCount: number; totalKeys: number; activeKeys: number; totalRequests: number; recentRequests: number; errorCount: number; topKeys: { label: string; prefix: string; requests: number }[] }> {
@@ -248,6 +254,10 @@ export class KeyGuardDb implements IDatabaseBackend {
 
   async getAdminAuditLog(limit = 50): Promise<AdminAuditLogRow[]> {
     return this.db.prepare("SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT ?").all(limit) as any
+  }
+
+  async updateUsageLog(id: string, statusCode: number, latencyMs: number): Promise<void> {
+    this.db.prepare("UPDATE usage_logs SET status_code = ?, latency_ms = ? WHERE id = ?").run(statusCode, latencyMs, id)
   }
 
   async close(): Promise<void> {

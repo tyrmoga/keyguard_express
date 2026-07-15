@@ -78,7 +78,7 @@ app.post("/contact", validateBody(ContactSchema), (req: Request, res: Response) 
 
 // Tier 2: HMAC-signed webhook endpoint
 app.post("/webhook",
-  requireHmac({ secret: config.secretKey }),
+  requireHmac({ secret: process.env.WEBHOOK_SECRET || config.secretKey }),
   (req: Request, res: Response) => {
     res.json({ status: "verified", payload: req.body })
   })

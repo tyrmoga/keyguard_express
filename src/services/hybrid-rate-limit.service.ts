@@ -1,3 +1,4 @@
+import * as crypto from "crypto"
 import Redis from "ioredis"
 import { RateLimitResult, IRateLimitBackend } from "../types"
 import { MemoryRateLimitService } from "./memory-rate-limit.service"
@@ -15,7 +16,25 @@ export class HybridRateLimitService implements IRateLimitBackend {
   }
 
   async isRateLimited(keyId: string, limit: number, windowSeconds = 60): Promise<RateLimitResult> {
-    return this.memory.isRateLimited(keyId, limit, windowSeconds)
+    try {
+      const now = Date.now() / 1000
+      const redisKey = `ratelimit:${keyId}`
+      const cutoff = now - windowSeconds
+      const multi = this.redis.multi()
+      multi.zremrangebyscore(redisKey, 0, cutoff)
+      multi.zcard(redisKey)
+      const results = await multi.exec()
+      if (!results) return this.memory.isRateLimited(keyId, limit, windowSeconds)
+      const currentCount = results[1][1] as number
+      if (currentCount >= limit) return { limited: true, remaining: 0 }
+      const member = `${now}:${crypto.randomUUID()}`
+      await this.redis.zadd(redisKey, now, member)
+      await this.redis.expire(redisKey, windowSeconds + 1)
+      const remaining = limit - currentCount - 1
+      return { limited: false, remaining: Math.max(0, remaining) }
+    } catch {
+      return this.memory.isRateLimited(keyId, limit, windowSeconds)
+    }
   }
 
   async isBlocked(identifier: string): Promise<boolean> {

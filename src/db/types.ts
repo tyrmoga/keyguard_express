@@ -19,7 +19,7 @@ export interface IDatabaseBackend {
   setRotation(oldKeyId: string, newKeyId: string): Promise<void>
   getMonthlyUsage(keyId: string): Promise<number>
 
-  logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<void>
+  logUsage(keyId: string, path: string, method: string, statusCode: number, latencyMs: number, ipAddress: string): Promise<string>
 
   getStats(): Promise<{
     orgCount: number; totalKeys: number; activeKeys: number
@@ -40,4 +40,6 @@ export interface IDatabaseBackend {
 
   logAdminAction(adminTokenId: string | null, action: string, targetType: string, targetId: string, ipAddress: string): Promise<void>
   getAdminAuditLog(limit?: number): Promise<AdminAuditLogRow[]>
+
+  updateUsageLog(id: string, statusCode: number, latencyMs: number): Promise<void>
 }
