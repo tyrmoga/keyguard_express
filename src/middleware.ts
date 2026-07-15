@@ -91,8 +91,7 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         if (monthlyUsage > keyObj.monthly_limit) {
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
         }
-        ;(req as any)._kgLogId = await kg.db.getMonthlyUsage(keyObj.id)
-      }
+              }
 
       // 5. Rate Limiting
       const { limited, remaining } = await kg.rateLimiting.isRateLimited(keyHash, keyObj.rate_limit_per_minute)
