@@ -79,6 +79,9 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         if (routeLimit) {
           const { limited } = await kg.rateLimiting.isRateLimited(`route:${routeLimit.id}`, routeLimit.max_requests, routeLimit.window_seconds)
           if (limited) {
+            setImmediate(() => kg.db.logUsage(keyObj.id, req.path, req.method, 429, 0, ipAddress))
+            res.set("X-RateLimit-Limit", String(routeLimit.max_requests))
+            res.set("X-RateLimit-Remaining", "0")
             return void res.status(429).json({ detail: "Route rate limit exceeded." })
           }
         }
@@ -91,6 +94,8 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         if (monthlyUsage > keyObj.monthly_limit) {
           const mLat = Date.now() - startTime
           setImmediate(() => kg.db.updateUsageLog(logId, 429, mLat))
+          res.set("X-RateLimit-Limit", String(keyObj.rate_limit_per_minute))
+          res.set("X-RateLimit-Remaining", "0")
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
         }
               }
