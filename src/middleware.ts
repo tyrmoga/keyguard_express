@@ -89,6 +89,8 @@ export function keyGuardMiddleware(kg: KeyGuard, protectedPath = "/api") {
         const logId = await kg.db.logUsage(keyObj.id, req.path, req.method, 0, 0, ipAddress); (req as any)._kgLogId = logId
         const monthlyUsage = await kg.db.getMonthlyUsage(keyObj.id)
         if (monthlyUsage > keyObj.monthly_limit) {
+          const mLat = Date.now() - startTime
+          setImmediate(() => kg.db.updateUsageLog(logId, 429, mLat))
           return void res.status(429).json({ detail: "Monthly request limit exceeded." })
         }
               }
