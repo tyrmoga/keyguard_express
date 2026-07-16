@@ -2,6 +2,8 @@
 
 > Express.js port of [keyguard](https://github.com/The-honoured1/keyguard) (Python/FastAPI) — API key authentication, rate limiting, and abuse prevention as drop-in middleware.
 
+📖 **See [`HOW_TO_USE.md`](HOW_TO_USE.md) for full usage examples, curl/Postman guides, and configuration reference.**
+
 This is a **TypeScript fork** of the original Python project. See [`migrations.md`](migrations.md) for the full porting context and architecture decisions.
 
 ## Features
