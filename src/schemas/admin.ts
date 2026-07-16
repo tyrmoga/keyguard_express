@@ -7,7 +7,7 @@ export const OrgCreateSchema = z.object({
 export const KeyCreateSchema = z.object({
   org_name: z.string().min(1),
   label: z.string().min(1).max(255),
-  prefix: z.string().max(255).default("kg_live_"),
+  prefix: z.string().max(32).default("kg_live_"),
   rate_limit_per_minute: z.number().int().min(1).max(10000).default(60),
   scopes: z.array(z.string()).default(["read"]),
   monthly_limit: z.number().int().min(1).optional(),
