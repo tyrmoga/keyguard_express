@@ -14,6 +14,7 @@ export const KeyCreateSchema = z.object({
   expires_at: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
     message: "Invalid date format. Use ISO 8601 (e.g. 2026-12-31T23:59:59Z) or YYYY-MM-DD HH:MM:SS.",
   }).optional(),
+  allowed_ips: z.string().optional(),
 })
 
 export const RotationSchema = z.object({

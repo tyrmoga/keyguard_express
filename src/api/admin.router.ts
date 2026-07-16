@@ -132,6 +132,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
       scopes: parsed.data.scopes,
       monthly_limit: parsed.data.monthly_limit,
       expires_at: parsed.data.expires_at,
+      allowed_ips: parsed.data.allowed_ips,
       key_salt: keySalt,
       key_hash_stretched: stretchedHash,
     })
@@ -145,6 +146,7 @@ export function createAdminRouter(kg: KeyGuard): Router {
       rate_limit_per_minute: apiKey.rate_limit_per_minute,
       monthly_limit: apiKey.monthly_limit,
       expires_at: apiKey.expires_at,
+      allowed_ips: apiKey.allowed_ips,
       scopes: JSON.parse(apiKey.scopes || "[]"),
       org_name: org.name,
       created_at: apiKey.created_at,

@@ -60,6 +60,7 @@ program
   .option("--prefix <prefix>", "Key prefix", "kg_live_")
   .option("--rate-limit <n>", "Requests per minute", parseInt)
   .option("--scopes <scopes>", "Comma-separated scopes")
+  .option("--allowed-ips <json>", 'JSON array of allowed IPs/CIDRs (e.g. ["10.0.0.0/8"])')
   .action(async (args, cmd) => {
     const opts = cmd.parent?.opts() ?? {}
     const kg = getKg(opts)
@@ -83,6 +84,7 @@ program
       key_hash: keyHash,
       rate_limit_per_minute: rateLimit,
       scopes,
+      allowed_ips: args.allowedIps,
       key_salt: keySalt,
       key_hash_stretched: stretchedHash,
     })
