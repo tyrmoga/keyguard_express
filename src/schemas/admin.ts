@@ -14,7 +14,16 @@ export const KeyCreateSchema = z.object({
   expires_at: z.string().refine((val) => !isNaN(new Date(val).getTime()), {
     message: "Invalid date format. Use ISO 8601 (e.g. 2026-12-31T23:59:59Z) or YYYY-MM-DD HH:MM:SS.",
   }).optional(),
-  allowed_ips: z.string().optional(),
+  allowed_ips: z.string().refine((val) => {
+    try {
+      const parsed = JSON.parse(val)
+      return Array.isArray(parsed) && parsed.every((e: any) => typeof e === "string")
+    } catch {
+      return false
+    }
+  }, {
+    message: "Must be a JSON array of IP/CIDR strings (e.g. [\"10.0.0.0/8\", \"192.168.1.100\"]).",
+  }).optional(),
 })
 
 export const RotationSchema = z.object({

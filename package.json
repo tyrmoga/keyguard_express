@@ -1,6 +1,6 @@
 {
   "name": "keyguard-express",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "API key authentication, rate limiting, and abuse prevention as a drop-in Express.js library.",
   "license": "MIT",
   "repository": {
